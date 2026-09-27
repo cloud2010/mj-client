@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MJ 图库 · 我的生成记录</title>
+<style>
+  :root {
+    --bg: #0e1015;
+    --bg-soft: #151922;
+    --card: #181d27;
+    --card-hover: #1e2431;
+    --border: #262d3b;
+    --text: #e6e9ef;
+    --muted: #8b94a7;
+    --accent: #6d8bff;
+    --accent-2: #9d7bff;
+    --ok: #3ecf8e;
+    --warn: #f5a524;
+    --err: #f2555a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #1c2333 0%, transparent 60%),
+                radial-gradient(900px 500px at 100% 0%, #221f33 0%, transparent 55%), var(--bg);
+    color: var(--text);
+    font: 14px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(14px);
+    background: rgba(14, 16, 21, .82);
+    border-bottom: 1px solid var(--border);
+  }
+  .bar {
+    max-width: 1600px; margin: 0 auto; padding: 14px 22px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+  .logo .dot {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-size: 15px; font-weight: 700; color: #0d0f14;
+  }
+  .logo h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  .logo p { margin: 0; font-size: 12px; color: var(--muted); }
+  .ctrl { display: flex; align-items: center; gap: 8px; }
+  select, button {
+    font: inherit; color: var(--text); background: var(--bg-soft);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; cursor: pointer;
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  select:hover, button:hover { background: var(--card-hover); border-color: #384154; }
+  button:active { transform: translateY(1px); }
+  button.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: none; color: #0d0f14; font-weight: 600; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .count { font-size: 12px; color: var(--muted); }
+
+  main { max-width: 1600px; margin: 0 auto; padding: 22px; }
+  .banner {
+    display: none; margin-bottom: 16px; padding: 12px 14px; border-radius: 10px;
+    background: rgba(242, 85, 90, .12); border: 1px solid rgba(242, 85, 90, .35); color: #ffb3b6;
+  }
+  .banner.show { display: block; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+    display: flex; flex-direction: column; transition: border-color .18s, transform .18s, box-shadow .18s;
+  }
+  .card:hover { border-color: #384154; transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.35); }
+
+  .tiles { display: grid; gap: 3px; background: #0b0d12; }
+  .tiles.four { grid-template-columns: 1fr 1fr; }
+  .tiles.one { grid-template-columns: 1fr; }
+  .tile {
+    position: relative; aspect-ratio: 1/1; overflow: hidden; background: #10131a;
+    border: none; padding: 0; cursor: pointer; display: block; width: 100%;
+  }
+  .tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s, filter .2s; }
+  .tile:hover img { transform: scale(1.04); filter: brightness(1.08); }
+  .tile .idx {
+    position: absolute; left: 8px; top: 8px; z-index: 2;
+    background: rgba(10, 12, 17, .72); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px; padding: 1px 7px; font-size: 11px; color: #cfd6e6;
+  }
+  .tile .hover {
+    position: absolute; inset: 0; z-index: 3; display: grid; place-items: center;
+    background: linear-gradient(180deg, rgba(10,12,17,0) 40%, rgba(10,12,17,.72) 100%);
+    opacity: 0; transition: opacity .18s;
+  }
+  .tile:hover .hover { opacity: 1; }
+  .tile .hover span {
+    margin-top: 28%; background: rgba(109,139,255,.92); color: #0b0d12; font-weight: 600;
+    padding: 6px 12px; border-radius: 999px; font-size: 12px;
+  }
+
+  .meta { padding: 13px 14px 14px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.type { border-color: rgba(109,139,255,.4); color: #a9bcff; }
+  .badge.ok { border-color: rgba(62,207,142,.4); color: var(--ok); }
+  .badge.warn { border-color: rgba(245,165,36,.4); color: var(--warn); }
+  .badge.err { border-color: rgba(242,85,90,.4); color: var(--err); }
+  .prompt {
+    font-size: 13px; color: #c8cfdd; margin: 0; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden; cursor: pointer;
+  }
+  .prompt.open { -webkit-line-clamp: unset; }
+  .foot { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+  .time { font-size: 12px; color: var(--muted); margin-right: auto; }
+  .mini {
+    font-size: 12px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: #c8cfdd;
+  }
+
+  .empty { text-align: center; color: var(--muted); padding: 70px 20px; }
+  .spinner {
+    width: 22px; height: 22px; margin: 0 auto 12px; border-radius: 50%;
+    border: 2px solid #2b3344; border-top-color: var(--accent); animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .more-wrap { display: flex; justify-content: center; padding: 26px 0 40px; }
+  #toast {
+    position: fixed; right: 20px; bottom: 20px; z-index: 50; display: flex; flex-direction: column; gap: 8px;
+  }
+  .toast-item {
+    background: #1c2230; border: 1px solid var(--border); border-radius: 10px; padding: 9px 14px;
+    font-size: 13px; box-shadow: 0 10px 24px rgba(0,0,0,.4); animation: in .18s ease-out;
+  }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="logo">
+      <div class="dot">MJ</div>
+      <div>
+        <h1>我的生成记录</h1>
+        <p>点击任意一张图即可下载对应 PNG 原图</p>
+      </div>
+    </div>
+    <div class="ctrl">
+      <span class="count" id="count">—</span>
+      <select id="pageSize">
+        <option value="10">每页 10</option>
+        <option value="20" selected>每页 20</option>
+        <option value="30">每页 30</option>
+      </select>
+      <button id="refresh">刷新</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="banner" id="banner"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" style="display:none">
+    <div class="spinner" id="spinner" style="display:none"></div>
+    <div id="emptyText">加载中…</div>
+  </div>
+  <div class="more-wrap"><button id="more" style="display:none">加载更多</button></div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const state = { before: 0, pageSize: 20, loading: false, done: false, total: 0 };
+const $ = (id) => document.getElementById(id);
+
+function toast(text) {
+  const el = document.createElement('div');
+  el.className = 'toast-item';
+  el.textContent = text;
+  $('toast').appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function statusBadge(msg) {
+  const s = msg.status || '';
+  const cls = s === 'SUCCESS' ? 'ok' : (s === 'FAILURE' || s === 'CANCEL' ? 'err' : 'warn');
+  const label = { SUCCESS: '完成', FAILURE: '失败', CANCEL: '已取消', IN_PROGRESS: '生成中', NOT_START: '排队中', SUBMITTED: '已提交' }[s] || s;
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+/** 取出可展示/可下载的图片列表：四宫格优先用 image_urls，单图消息用 image_url。 */
+function pickImages(msg) {
+  const arr = (msg.image_urls || []).filter(Boolean);
+  if (arr.length) {
+    return arr.map((it) => ({ thumb: it.thumbnail || it.url, full: it.url }));
+  }
+  const full = msg.image_url || msg.cdn_image_url || '';
+  if (full) return [{ thumb: msg.thumbnail_image_url || full, full }];
+  return [];
+}
+
+function download(full, name) {
+  const a = document.createElement('a');
+  a.href = '/dl?url=' + encodeURIComponent(full) + '&name=' + encodeURIComponent(name);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast('开始下载 ' + name);
+}
+
+function fileBase(msg) {
+  return 'mj_' + msg.id;
+}
+
+function extOf(url) {
+  const m = /\.([a-zA-Z0-9]+)(?:\?|$)/.exec(url || '');
+  return m ? '.' + m[1].toLowerCase() : '.png';
+}
+
+function card(msg) {
+  const imgs = pickImages(msg);
+  const el = document.createElement('article');
+  el.className = 'card';
+
+  const tiles = document.createElement('div');
+  tiles.className = 'tiles ' + (imgs.length > 1 ? 'four' : 'one');
+  imgs.forEach((img, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tile';
+    btn.title = '点击下载原图';
+    btn.innerHTML =
+      (imgs.length > 1 ? `<span class="idx">${i + 1}</span>` : '') +
+      `<img loading="lazy" src="${img.thumb}" alt="image ${i + 1}">` +
+      `<span class="hover"><span>下载 PNG</span></span>`;
+    btn.addEventListener('click', () => {
+      download(img.full, `${fileBase(msg)}_${i + 1}${extOf(img.full)}`);
+    });
+    tiles.appendChild(btn);
+  });
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const type = msg.type === 'NIJI_JOURNEY' ? 'niji' : 'Midjourney';
+  const action = msg.action ? ` · ${msg.action}` : '';
+  const task = msg.task || {};
+  const prompt = (task.prompt_en || task.prompt || msg.message_content || '').replace(/\*\*/g, '').trim();
+
+  meta.innerHTML =
+    `<div class="badges">
+       ${statusBadge(msg)}
+       <span class="badge type">${type}</span>
+       <span class="badge">#${msg.id}</span>
+       ${task.progress && msg.status !== 'SUCCESS' ? `<span class="badge warn">${task.progress}</span>` : ''}
+       ${imgs.length > 1 ? `<span class="badge">${imgs.length} 张</span>` : ''}
+       <span style="font-size:11px;color:var(--muted)">${action}</span>
+     </div>
+     <p class="prompt" title="点击展开/收起">${prompt ? escapeHtml(prompt) : '（无提示词）'}</p>
+     <div class="foot">
+       <span class="time">${fmtTime(msg.finish_time || msg.submit_time)}</span>
+       ${imgs.length > 1 ? `<button class="mini" data-all="1">下载全部 ${imgs.length} 张</button>` : ''}
+       <button class="mini" data-copy="1">复制提示词</button>
+     </div>`;
+
+  meta.querySelector('.prompt').addEventListener('click', (e) => e.currentTarget.classList.toggle('open'));
+  const allBtn = meta.querySelector('[data-all]');
+  if (allBtn) {
+    allBtn.addEventListener('click', () => {
+      imgs.forEach((img, i) => {
+        setTimeout(() => download(img.full, `${fileBase(msg)}_${i + 1}${extOf(img.full)}`), i * 350);
+      });
+    });
+  }
+  meta.querySelector('[data-copy]').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      toast('提示词已复制');
+    } catch { toast('复制失败，请手动选择文本'); }
+  });
+
+  el.append(tiles, meta);
+  return el;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+async function loadMore(reset = false) {
+  if (state.loading) return;
+  if (reset) {
+    state.before = 0; state.done = false; state.total = 0;
+    $('grid').innerHTML = '';
+  }
+  if (state.done) return;
+  state.loading = true;
+  $('spinner').style.display = 'block';
+  $('emptyText').textContent = '加载中…';
+  $('empty').style.display = $('grid').children.length ? 'none' : 'block';
+  $('more').style.display = 'none';
+  try {
+    const res = await fetch(`/api/list?page_size=${state.pageSize}&before=${state.before}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    const list = (data.list || []).filter((m) => pickImages(m).length);
+    const frag = document.createDocumentFragment();
+    list.forEach((m) => frag.appendChild(card(m)));
+    $('grid').appendChild(frag);
+    state.total += list.length;
+    const pg = data.pagination || {};
+    $('count').textContent = `已加载 ${state.total} 条${pg.total ? ' / 共 ' + pg.total : ''}`;
+    if (!data.list || data.list.length < state.pageSize) {
+      state.done = true;
+    } else {
+      const times = data.list.map((m) => m.submit_time).filter(Boolean);
+      state.before = times.length ? Math.min(...times) : state.before;
+      if (!times.length) state.done = true;
+    }
+    $('banner').classList.remove('show');
+  } catch (err) {
+    const b = $('banner');
+    b.textContent = '加载失败：' + err.message + '（确认 server.py 正在运行且 Auth Code 有效）';
+    b.classList.add('show');
+  } finally {
+    state.loading = false;
+    $('spinner').style.display = 'none';
+    const has = $('grid').children.length > 0;
+    $('empty').style.display = has ? 'none' : 'block';
+    $('emptyText').textContent = has ? '' : '暂无图片';
+    $('more').style.display = state.done || !has ? 'none' : 'block';
+    $('more').textContent = '加载更多';
+    $('more').disabled = false;
+  }
+}
+
+$('refresh').addEventListener('click', () => loadMore(true));
+$('pageSize').addEventListener('change', (e) => { state.pageSize = +e.target.value; loadMore(true); });
+$('more').addEventListener('click', () => loadMore());
+window.addEventListener('scroll', () => {
+  if (window.innerHeight + window.scrollY > document.body.offsetHeight - 400) loadMore();
+});
+loadMore();
+</script>
+</body>
+</html>

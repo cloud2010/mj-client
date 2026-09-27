@@ -1,0 +1,31 @@
+# 凭证与密钥 —— 切勿上传
+AUTH_CODE.txt
+auth_code.txt
+*.auth_code
+state.json
+*.token
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# 日志与运行时产物
+*.log
+out.log
+err.log
+*.tmp
+
+# 编辑器与系统文件
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

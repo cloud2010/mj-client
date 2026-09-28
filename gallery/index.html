@@ -58,6 +58,53 @@
   button:disabled { opacity: .55; cursor: not-allowed; }
   .count { font-size: 12px; color: var(--muted); }
 
+  #genBtnWrap { position: relative; }
+  #genMenu {
+    position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; min-width: 190px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 6px;
+    box-shadow: 0 14px 30px rgba(0,0,0,.45); display: none;
+  }
+  #genMenu.show { display: block; }
+  #genMenu button {
+    display: block; width: 100%; text-align: left; border: none; background: transparent;
+    padding: 9px 10px; border-radius: 7px; cursor: pointer;
+  }
+  #genMenu button:hover { background: var(--card-hover); }
+  #genMenu button small { display: block; color: var(--muted); font-size: 11px; }
+
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 60; display: none; place-items: center;
+    background: rgba(6, 8, 12, .68); backdrop-filter: blur(3px); padding: 20px;
+  }
+  .modal-mask.show { display: grid; }
+  .modal {
+    width: min(620px, 100%); max-height: 90vh; overflow: auto;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55); animation: in .16s ease-out;
+  }
+  .modal header {
+    position: static; backdrop-filter: none; background: transparent; border: none;
+    display: flex; align-items: center; padding: 16px 18px 6px;
+  }
+  .modal header h2 { font-size: 15px; margin: 0 auto 0 0; }
+  .modal .body { padding: 6px 18px 4px; display: flex; flex-direction: column; gap: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .modal textarea, .modal input, .modal select {
+    width: 100%; font: inherit; color: var(--text); background: var(--bg-soft);
+    border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; resize: vertical;
+  }
+  .modal textarea { min-height: 120px; }
+  .modal textarea:focus, .modal input:focus, .modal select:focus { outline: 1px solid var(--accent); }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .stylize-row { display: flex; align-items: center; gap: 10px; }
+  .stylize-row input[type=range] { flex: 1; }
+  .hint { font-size: 12px; color: var(--muted); }
+  .modal .actions {
+    display: flex; align-items: center; gap: 10px; padding: 12px 18px 18px;
+  }
+  .modal .actions .hint { margin-right: auto; }
+
+
   main { max-width: 1600px; margin: 0 auto; padding: 22px; }
   .banner {
     display: none; margin-bottom: 16px; padding: 12px 14px; border-radius: 10px;
@@ -150,6 +197,13 @@
     </div>
     <div class="ctrl">
       <span class="count" id="count">—</span>
+      <div id="genBtnWrap">
+        <button id="genBtn" class="primary">生成图片</button>
+        <div id="genMenu">
+          <button data-preset="mj">Midjourney v7<small>通用写实 / 概念插画</small></button>
+          <button data-preset="niji">Niji 7<small>动漫插画风格</small></button>
+        </div>
+      </div>
       <select id="pageSize">
         <option value="10">每页 10</option>
         <option value="20" selected>每页 20</option>
@@ -169,6 +223,64 @@
   </div>
   <div class="more-wrap"><button id="more" style="display:none">加载更多</button></div>
 </main>
+
+<div class="modal-mask" id="genMask">
+  <form class="modal" id="genForm">
+    <header>
+      <h2>生成图片</h2>
+      <button type="button" class="mini" id="genClose">关闭</button>
+    </header>
+    <div class="body">
+      <div class="field">
+        <label for="genPrompt">提示词</label>
+        <textarea id="genPrompt" placeholder="描述你想生成的画面…&#10;额外参数（如 --no xxx --style raw）可直接写在末尾"></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="genModel">模型</label>
+          <select id="genModel">
+            <option value="MID_JOURNEY|--v 7" selected>Midjourney v7</option>
+            <option value="MID_JOURNEY|--v 6.1">Midjourney v6.1</option>
+            <option value="MID_JOURNEY|--v 6">Midjourney v6</option>
+            <option value="NIJI_JOURNEY|--niji 7">Niji 7（动漫）</option>
+            <option value="NIJI_JOURNEY|--niji 6">Niji 6（动漫）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="genAr">画幅</label>
+          <select id="genAr">
+            <option value="1:1" selected>1:1 方形</option>
+            <option value="16:9">16:9 横屏</option>
+            <option value="9:16">9:16 竖屏</option>
+            <option value="4:3">4:3</option>
+            <option value="3:4">3:4 竖版</option>
+            <option value="2:3">2:3 竖版</option>
+            <option value="3:2">3:2 横版</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="genSpeed">出图模式</label>
+          <select id="genSpeed">
+            <option value="relax" selected>relax（省额度）</option>
+            <option value="fast">fast（快速）</option>
+            <option value="turbo">turbo（极速）</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="genStylize">风格化 --s：<b id="genStylizeVal">200</b></label>
+        <div class="stylize-row">
+          <input type="range" id="genStylize" min="0" max="1000" step="50" value="200">
+        </div>
+      </div>
+      <p class="hint" id="genHint">提示：画幅 / 风格化由表单生成，提示词里不必再写 --ar / --s。</p>
+    </div>
+    <div class="actions">
+      <span class="hint" id="genStatus"></span>
+      <button type="submit" class="primary" id="genSubmit">提交任务</button>
+    </div>
+  </form>
+</div>
 
 <div id="toast"></div>
 
@@ -377,6 +489,68 @@ async function loadMore(reset = false) {
     $('more').disabled = false;
   }
 }
+
+/* ---------------- 生成图片弹窗 ---------------- */
+function openGen(preset) {
+  const sel = $('genModel');
+  if (preset === 'niji') sel.value = 'NIJI_JOURNEY|--niji 7';
+  else if (preset === 'mj') sel.value = 'MID_JOURNEY|--v 7';
+  $('genStatus').textContent = '';
+  $('genMask').classList.add('show');
+  setTimeout(() => $('genPrompt').focus(), 30);
+}
+function closeGen() { $('genMask').classList.remove('show'); }
+
+$('genBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('genMenu').classList.toggle('show');
+});
+document.addEventListener('click', () => $('genMenu').classList.remove('show'));
+$('genMenu').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-preset]');
+  if (!btn) return;
+  openGen(btn.dataset.preset);
+});
+$('genClose').addEventListener('click', closeGen);
+$('genMask').addEventListener('click', (e) => { if (e.target === $('genMask')) closeGen(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeGen(); });
+$('genStylize').addEventListener('input', (e) => { $('genStylizeVal').textContent = e.target.value; });
+
+$('genForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const prompt = $('genPrompt').value.trim();
+  if (!prompt) { toast('请先填写提示词'); return; }
+  const [botType, model] = $('genModel').value.split('|');
+  const payload = {
+    prompt,
+    bot_type: botType,
+    model,
+    ar: $('genAr').value,
+    speed: $('genSpeed').value,
+    stylize: +$('genStylize').value,
+  };
+  const btn = $('genSubmit');
+  btn.disabled = true;
+  $('genStatus').textContent = '提交中…';
+  try {
+    const res = await fetch('/api/imagine', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    toast(`任务已提交，消息 #${data.msg_id}`);
+    $('genPrompt').value = '';
+    $('genStatus').textContent = '';
+    closeGen();
+    loadMore(true);
+  } catch (err) {
+    $('genStatus').textContent = '';
+    toast('提交失败：' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 $('refresh').addEventListener('click', () => loadMore(true));
 $('pageSize').addEventListener('change', (e) => { state.pageSize = +e.target.value; loadMore(true); });

@@ -15,6 +15,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import sys
 import threading
 import time
@@ -43,7 +44,20 @@ UPSTREAM_TIMEOUT = 30.0
 DOWNLOAD_TIMEOUT = 120.0
 
 _token_cache: dict[str, Any] = {"token": None, "exp": 0.0}
+# 服务端保存的用户默认设置（登录时从 user_info.settings 读取），提交任务时作为基底
+_settings_cache: dict[str, Any] = {}
 _client: httpx.AsyncClient | None = None
+
+# 前端可选的画图 option（值需与上游 settings 字段一致）
+BOT_TYPES = {"MID_JOURNEY", "NIJI_JOURNEY"}
+SPEEDS = {"relax", "fast", "turbo"}
+MODELS = {"", "--v 7", "--v 6.1", "--v 6", "--niji 7", "--niji 6"}
+DEFAULT_SETTINGS = {
+    "MID_JOURNEY": {"model": "--v 7", "style": "", "stylize": 100,
+                    "remix": False, "variation": "high", "speed": "fast"},
+    "NIJI_JOURNEY": {"model": "--niji 7", "style": "", "stylize": 100,
+                     "remix": False, "variation": "high", "speed": "fast"},
+}
 
 
 # ------------------------------ 认证 ------------------------------
@@ -97,6 +111,12 @@ async def get_token(force: bool = False) -> str:
         cached = _load_cached_token()
         if cached:
             _token_cache.update(token=cached[0], exp=cached[1])
+            try:  # 复用缓存 token 时，顺带取回上次保存的用户设置
+                state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+                _settings_cache.clear()
+                _settings_cache.update(state.get("settings") or {})
+            except Exception:
+                pass
             return cached[0]
     if force:
         _token_cache.update(token=None, exp=0.0)
@@ -123,6 +143,8 @@ async def get_token(force: bool = False) -> str:
     token = data["token"]
     exp = _jwt_exp(token) or time.time() + 86400 * 6
     _token_cache.update(token=token, exp=exp)
+    _settings_cache.clear()
+    _settings_cache.update((data.get("user_info") or {}).get("settings") or {})
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         STATE_FILE.write_text(json.dumps({
@@ -162,12 +184,35 @@ async def upstream(method: str, path: str, payload: dict | None = None,
     return res
 
 
+    return res
+
+
+def settings_for(bot_type: str, overrides: dict | None = None) -> dict:
+    """用户默认设置 -> 本次 overrides 合并后的 settings（同上游 /api/user/auth 的字段）。"""
+    base = dict(DEFAULT_SETTINGS.get(bot_type) or DEFAULT_SETTINGS["MID_JOURNEY"])
+    base.update(_settings_cache.get(bot_type) or {})
+    for key, value in (overrides or {}).items():
+        if value is not None:
+            base[key] = value
+    return base
+
+
 # ------------------------------ 响应模型 ------------------------------
 
 class MessageList(BaseModel):
     # 字段名 list 会遮蔽内置 list，故用 typing.List 写注解
     list: List[dict] = Field(default_factory=list)
     pagination: dict = Field(default_factory=dict)
+
+
+class ImagineRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, description="提示词（不含参数后缀）")
+    bot_type: str = Field("MID_JOURNEY", description="MID_JOURNEY 或 NIJI_JOURNEY")
+    model: str | None = Field(None, description="如 --v 7 / --niji 7")
+    speed: str | None = Field(None, description="relax / fast / turbo")
+    stylize: int | None = Field(None, ge=0, le=1000, description="--s 风格化值")
+    variation: str | None = Field(None, description="high / low")
+    ar: str | None = Field(None, description="画幅，如 16:9；留空则不加 --ar")
 
 
 # ------------------------------ 应用 ------------------------------
@@ -212,6 +257,54 @@ async def message_list(
 async def user_info():
     res = await upstream("GET", "/api/user/info")
     return res.get("data") or {}
+
+
+@app.get("/api/models", summary="可选的绘图模型与默认设置")
+async def models():
+    return {
+        "bot_types": sorted(BOT_TYPES),
+        "models": sorted(MODELS),
+        "speeds": sorted(SPEEDS),
+        "settings": {k: settings_for(k) for k in sorted(BOT_TYPES)},
+    }
+
+
+@app.post("/api/imagine", summary="提交文生图任务")
+async def imagine(req: ImagineRequest):
+    bot_type = req.bot_type if req.bot_type in BOT_TYPES else "MID_JOURNEY"
+    if req.model is not None and req.model not in MODELS:
+        raise HTTPException(status_code=400, detail="不支持的模型: %s" % req.model)
+    if req.speed is not None and req.speed not in SPEEDS:
+        raise HTTPException(status_code=400, detail="不支持的出图模式: %s" % req.speed)
+    if req.variation is not None and req.variation not in {"high", "low"}:
+        raise HTTPException(status_code=400, detail="variation 只能是 high / low")
+
+    prompt = req.prompt.strip()
+    if req.ar:
+        ar = req.ar.strip()
+        if not re.fullmatch(r"\d{1,2}:\d{1,2}", ar):
+            raise HTTPException(status_code=400, detail="画幅格式应为 宽:高，如 16:9")
+        prompt = "%s --ar %s" % (prompt, ar)
+
+    # niji 只能用 niji 模型，MJ 只能用 MJ 模型，避免提交到错误的 bot
+    model = req.model
+    if model and (model.startswith("--niji")) != (bot_type == "NIJI_JOURNEY"):
+        raise HTTPException(status_code=400,
+                            detail="模型 %s 与 bot 类型 %s 不匹配" % (model, bot_type))
+
+    res = await upstream("POST", "/api/msg/interaction", {
+        "type": bot_type,
+        "action": "IMAGINE",
+        "data": {
+            "settings": settings_for(bot_type, {
+                "model": model, "speed": req.speed, "stylize": req.stylize,
+                "variation": req.variation,
+            }),
+            "prompt": prompt,
+        },
+    })
+    data = res.get("data") or {}
+    return {"task_id": data.get("task_id"), "msg_id": data.get("msg_id"), "prompt": prompt}
 
 
 @app.delete("/api/msg/{msg_id}", summary="删除指定消息（含其图片）")

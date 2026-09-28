@@ -26,7 +26,7 @@ from typing import Any, List
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Path as PathParam, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -152,7 +152,8 @@ async def upstream(method: str, path: str, payload: dict | None = None,
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail="上游请求失败: %s" % exc)
 
-    if res.get("code") in (401, 1100) and retry:
+    # 1103=账号在别处登录（换 token 即可恢复），1100/401=token 失效
+    if res.get("code") in (401, 1100, 1103) and retry:
         await get_token(force=True)
         return await upstream(method, path, payload, retry=False)
     if not res.get("success"):
@@ -211,6 +212,12 @@ async def message_list(
 async def user_info():
     res = await upstream("GET", "/api/user/info")
     return res.get("data") or {}
+
+
+@app.delete("/api/msg/{msg_id}", summary="删除指定消息（含其图片）")
+async def delete_message(msg_id: int = PathParam(..., ge=1, description="要删除的消息 id")):
+    await upstream("DELETE", "/api/msg/delete/%d" % msg_id)
+    return {"ok": True, "id": msg_id}
 
 
 @app.get("/dl", summary="下载原图（服务端转发并加附件头）")

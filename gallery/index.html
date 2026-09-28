@@ -70,6 +70,7 @@
     background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
     display: flex; flex-direction: column; transition: border-color .18s, transform .18s, box-shadow .18s;
   }
+  .card.deleting { opacity: .45; pointer-events: none; }
   .card:hover { border-color: #384154; transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.35); }
 
   .tiles { display: grid; gap: 3px; background: #0b0d12; }
@@ -115,6 +116,9 @@
     font-size: 12px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border);
     background: transparent; color: #c8cfdd;
   }
+  .mini.danger { border-color: rgba(242,85,90,.4); color: #ff9296; }
+  .mini.danger:hover { background: rgba(242,85,90,.14); border-color: rgba(242,85,90,.6); }
+  .foot .mini:last-child { margin-left: auto; }
 
   .empty { text-align: center; color: var(--muted); padding: 70px 20px; }
   .spinner {
@@ -141,7 +145,7 @@
       <div class="dot">MJ</div>
       <div>
         <h1>我的生成记录</h1>
-        <p>点击任意一张图即可下载对应 PNG 原图</p>
+        <p>点图下载单张 PNG · 卡片底部可下载合图 / 删除该条消息</p>
       </div>
     </div>
     <div class="ctrl">
@@ -169,7 +173,7 @@
 <div id="toast"></div>
 
 <script>
-const state = { before: 0, pageSize: 20, loading: false, done: false, total: 0 };
+const state = { before: 0, pageSize: 20, loading: false, done: false, total: 0, grandTotal: 0 };
 const $ = (id) => document.getElementById(id);
 
 function toast(text) {
@@ -203,6 +207,14 @@ function pickImages(msg) {
   const full = msg.image_url || msg.cdn_image_url || '';
   if (full) return [{ thumb: msg.thumbnail_image_url || full, full }];
   return [];
+}
+
+/** 拼合图（四宫格那张大图）的 URL；单图消息返回空，避免重复下载。 */
+function mergedImage(msg) {
+  if ((msg.image_urls || []).length > 1) {
+    return msg.image_url || msg.cdn_image_url || '';
+  }
+  return '';
 }
 
 function download(full, name) {
@@ -247,6 +259,7 @@ function card(msg) {
 
   const meta = document.createElement('div');
   meta.className = 'meta';
+  const merged = mergedImage(msg);
   const type = msg.type === 'NIJI_JOURNEY' ? 'niji' : 'Midjourney';
   const action = msg.action ? ` · ${msg.action}` : '';
   const task = msg.task || {};
@@ -264,8 +277,10 @@ function card(msg) {
      <p class="prompt" title="点击展开/收起">${prompt ? escapeHtml(prompt) : '（无提示词）'}</p>
      <div class="foot">
        <span class="time">${fmtTime(msg.finish_time || msg.submit_time)}</span>
+       ${merged ? `<button class="mini" data-merged="1">下载合图</button>` : ''}
        ${imgs.length > 1 ? `<button class="mini" data-all="1">下载全部 ${imgs.length} 张</button>` : ''}
        <button class="mini" data-copy="1">复制提示词</button>
+       <button class="mini danger" data-del="1">删除</button>
      </div>`;
 
   meta.querySelector('.prompt').addEventListener('click', (e) => e.currentTarget.classList.toggle('open'));
@@ -277,6 +292,29 @@ function card(msg) {
       });
     });
   }
+  const mergedBtn = meta.querySelector('[data-merged]');
+  if (mergedBtn) {
+    mergedBtn.addEventListener('click', () => {
+      download(merged, `${fileBase(msg)}_merged${extOf(merged)}`);
+    });
+  }
+  meta.querySelector('[data-del]').addEventListener('click', async () => {
+    if (!confirm(`确定删除消息 #${msg.id} 吗？该消息及其图片将从服务端移除，且不可恢复。`)) return;
+    el.classList.add('deleting');
+    try {
+      const res = await fetch(`/api/msg/${msg.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      el.remove();
+      state.total = Math.max(0, state.total - 1);
+      $('count').textContent = `已加载 ${state.total} 条${state.grandTotal ? ' / 共 ' + Math.max(0, state.grandTotal - 1) : ''}`;
+      state.grandTotal = state.grandTotal ? Math.max(0, state.grandTotal - 1) : 0;
+      toast(`已删除 #${msg.id}`);
+    } catch (err) {
+      el.classList.remove('deleting');
+      toast('删除失败：' + err.message);
+    }
+  });
   meta.querySelector('[data-copy]').addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(prompt);
@@ -314,6 +352,7 @@ async function loadMore(reset = false) {
     $('grid').appendChild(frag);
     state.total += list.length;
     const pg = data.pagination || {};
+    if (reset) state.grandTotal = pg.total || 0;
     $('count').textContent = `已加载 ${state.total} 条${pg.total ? ' / 共 ' + pg.total : ''}`;
     if (!data.list || data.list.length < state.pageSize) {
       state.done = true;

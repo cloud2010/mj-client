@@ -16,6 +16,9 @@ dist/
 .venv/
 venv/
 env/
+runs/*.json
+runs/*.md
+prompts/*.json
 
 # 日志与运行时产物
 *.log

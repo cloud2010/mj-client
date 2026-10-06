@@ -140,10 +140,12 @@
     opacity: 0; transition: opacity .18s;
   }
   .tile:hover .hover { opacity: 1; }
-  .tile .hover span {
-    margin-top: 28%; background: rgba(109,139,255,.92); color: #0b0d12; font-weight: 600;
-    padding: 6px 12px; border-radius: 999px; font-size: 12px;
+  .tile .hover .acts { margin-top: 30%; display: flex; gap: 8px; }
+  .tile .hover .pill {
+    background: rgba(109,139,255,.92); color: #0b0d12; font-weight: 600;
+    padding: 6px 12px; border-radius: 999px; font-size: 12px; border: none; line-height: 1.5;
   }
+  .tile .hover .pill:hover { background: #90a6ff; }
 
   .meta { padding: 13px 14px 14px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
   .badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -183,6 +185,27 @@
     font-size: 13px; box-shadow: 0 10px 24px rgba(0,0,0,.4); animation: in .18s ease-out;
   }
   @keyframes in { from { opacity: 0; transform: translateY(6px); } }
+
+  #pvMask { padding: 24px; }
+  .pv {
+    width: min(1200px, 100%); max-height: 92vh; display: flex; flex-direction: column; gap: 12px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55); animation: in .16s ease-out;
+  }
+  .pv-stage {
+    position: relative; flex: 1; min-height: 0; display: grid; place-items: center;
+    background: #0b0d12; border-radius: 10px; overflow: hidden;
+  }
+  .pv-stage img { max-width: 100%; max-height: calc(84vh - 70px); object-fit: contain; display: block; }
+  .pv-stage.loading img { opacity: .2; }
+  .pv-stage .spin {
+    position: absolute; width: 26px; height: 26px; border-radius: 50%; display: none;
+    border: 2px solid #2b3344; border-top-color: var(--accent); animation: spin .8s linear infinite;
+  }
+  .pv-stage.loading .spin { display: block; }
+  .pv-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pv-bar .hint { margin-right: auto; }
+  .pv-bar button[disabled] { display: none; }
 </style>
 </head>
 <body>
@@ -192,7 +215,7 @@
       <div class="dot">MJ</div>
       <div>
         <h1>我的生成记录</h1>
-        <p>点图下载单张 PNG · 卡片底部可下载合图 / 删除该条消息</p>
+        <p>点图下载单张 PNG · 悬停图片可预览大图 · 卡片底部可下载合图 / 删除该条消息</p>
       </div>
     </div>
     <div class="ctrl">
@@ -284,6 +307,23 @@
   </form>
 </div>
 
+<div class="modal-mask" id="pvMask">
+  <div class="pv">
+    <div class="pv-stage loading" id="pvStage">
+      <img id="pvImg" alt="预览图">
+      <div class="spin"></div>
+    </div>
+    <div class="pv-bar">
+      <span class="hint" id="pvInfo"></span>
+      <button type="button" class="mini" id="pvPrev">← 上一张</button>
+      <button type="button" class="mini" id="pvNext">下一张 →</button>
+      <button type="button" class="mini" id="pvOpen">新窗口打开原图</button>
+      <button type="button" class="mini" id="pvDl">下载 PNG</button>
+      <button type="button" class="mini" id="pvClose">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -358,17 +398,27 @@ function card(msg) {
   const tiles = document.createElement('div');
   tiles.className = 'tiles ' + (imgs.length > 1 ? 'four' : 'one');
   imgs.forEach((img, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'tile';
-    btn.title = '点击下载原图';
-    btn.innerHTML =
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.title = '点击下载原图';
+    const name = `${fileBase(msg)}_${i + 1}${extOf(img.full)}`;
+    tile.innerHTML =
       (imgs.length > 1 ? `<span class="idx">${i + 1}</span>` : '') +
       `<img loading="lazy" src="${img.thumb}" alt="image ${i + 1}">` +
-      `<span class="hover"><span>下载 PNG</span></span>`;
-    btn.addEventListener('click', () => {
-      download(img.full, `${fileBase(msg)}_${i + 1}${extOf(img.full)}`);
+      `<span class="hover"><span class="acts">` +
+      `<button type="button" class="pill" data-act="dl">下载 PNG</button>` +
+      `<button type="button" class="pill" data-act="pv">预览</button>` +
+      `</span></span>`;
+    tile.addEventListener('click', () => download(img.full, name));
+    tile.querySelector('[data-act="dl"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      download(img.full, name);
     });
-    tiles.appendChild(btn);
+    tile.querySelector('[data-act="pv"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openPreview(msg, imgs, i);
+    });
+    tiles.appendChild(tile);
   });
 
   const meta = document.createElement('div');
@@ -491,6 +541,55 @@ async function loadMore(reset = false) {
     $('more').disabled = false;
   }
 }
+
+/* ---------------- 图片预览 ---------------- */
+const pv = { msg: null, list: [], idx: 0 };
+
+function openPreview(msg, imgs, idx) {
+  pv.msg = msg; pv.list = imgs; pv.idx = idx;
+  renderPreview();
+  $('pvMask').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closePreview() {
+  $('pvMask').classList.remove('show');
+  document.body.style.overflow = '';
+}
+function stepPreview(d) {
+  if (pv.list.length < 2) return;
+  pv.idx = (pv.idx + d + pv.list.length) % pv.list.length;
+  renderPreview();
+}
+function renderPreview() {
+  const img = pv.list[pv.idx];
+  const stage = $('pvStage');
+  stage.classList.add('loading');
+  const loader = new Image();
+  loader.onload = () => { $('pvImg').src = img.full; stage.classList.remove('loading'); };
+  loader.onerror = () => { $('pvImg').src = img.thumb; stage.classList.remove('loading'); toast('原图加载失败，已显示缩略图'); };
+  loader.src = img.full;
+  const multiple = pv.list.length > 1;
+  $('pvInfo').textContent = `#${pv.msg.id}${multiple ? ` · 第 ${pv.idx + 1} / ${pv.list.length} 张` : ''}`;
+  $('pvPrev').disabled = !multiple;
+  $('pvNext').disabled = !multiple;
+}
+$('pvClose').addEventListener('click', closePreview);
+$('pvMask').addEventListener('click', (e) => { if (e.target === $('pvMask')) closePreview(); });
+$('pvPrev').addEventListener('click', () => stepPreview(-1));
+$('pvNext').addEventListener('click', () => stepPreview(1));
+$('pvDl').addEventListener('click', () => {
+  const img = pv.list[pv.idx];
+  download(img.full, `${fileBase(pv.msg)}_${pv.idx + 1}${extOf(img.full)}`);
+});
+$('pvOpen').addEventListener('click', () => {
+  window.open(pv.list[pv.idx].full, '_blank', 'noopener');
+});
+document.addEventListener('keydown', (e) => {
+  if (!$('pvMask').classList.contains('show')) return;
+  if (e.key === 'Escape') closePreview();
+  else if (e.key === 'ArrowLeft') stepPreview(-1);
+  else if (e.key === 'ArrowRight') stepPreview(1);
+});
 
 /* ---------------- 生成图片弹窗 ---------------- */
 function openGen(preset) {

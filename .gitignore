@@ -25,6 +25,7 @@ prompts/*.json
 out.log
 err.log
 *.tmp
+*.pdf
 
 # 编辑器与系统文件
 .idea/

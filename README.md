@@ -33,8 +33,9 @@ echo "你的AuthCode" > AUTH_CODE.txt
 ```bash
 python .codebuddy/skills/mj-client/scripts/mj.py auth            # 登录并缓存 token
 python .codebuddy/skills/mj-client/scripts/mj.py me              # 账户与剩余额度
+python .codebuddy/skills/mj-client/scripts/mj.py models            # 可选模型清单（含 --v 8.2）
 python .codebuddy/skills/mj-client/scripts/mj.py list --page-size 10
-python .codebuddy/skills/mj-client/scripts/mj.py imagine "a red panda" --ar 16:9 --model "--v 7" --speed fast --wait
+python .codebuddy/skills/mj-client/scripts/mj.py imagine "a red panda" --ar 16:9 --model "--v 8.2" --speed fast --wait
 python .codebuddy/skills/mj-client/scripts/mj.py action <msg_id> U1 --wait
 python .codebuddy/skills/mj-client/scripts/mj.py describe ./ref.png --wait
 python .codebuddy/skills/mj-client/scripts/mj.py blend a.png b.png --wait
@@ -52,13 +53,13 @@ python .codebuddy/skills/mj-client/scripts/mj.py upload ./image.png
 
 ```bash
 # 写实人像（--style raw 更接近原生照片质感）
-mj.py imagine "portrait of an old fisherman, weathered face, cinematic lighting, 85mm lens, shallow depth of field" --type MID_JOURNEY --model "--v 7" --ar 3:4 --style raw --speed fast --wait
+mj.py imagine "portrait of an old fisherman, weathered face, cinematic lighting, 85mm lens, shallow depth of field" --type MID_JOURNEY --model "--v 8.2" --ar 3:4 --style raw --speed fast --wait
 
 # 产品图（--no text 避免画面出现乱码文字）
-mj.py imagine "minimal product photo of a matte black wireless earbuds case on white marble, soft studio light" --type MID_JOURNEY --model "--v 6.1" --ar 1:1 --suffix "--no text" --speed fast --wait
+mj.py imagine "minimal product photo of a matte black wireless earbuds case on white marble, soft studio light" --type MID_JOURNEY --model "--v 8.2" --ar 1:1 --suffix "--no text" --speed fast --wait
 
 # 建筑 / 场景概念图
-mj.py imagine "modern glass cabin in a snowy forest at dusk, warm interior glow, volumetric light" --type MID_JOURNEY --model "--v 7" --ar 16:9 --stylize 250 --speed fast --wait
+mj.py imagine "modern glass cabin in a snowy forest at dusk, warm interior glow, volumetric light" --type MID_JOURNEY --model "--v 8.2" --ar 16:9 --stylize 250 --speed fast --wait
 ```
 
 **NIJI_JOURNEY** —— 二次元、动漫角色、立绘、贴纸：
@@ -67,8 +68,8 @@ mj.py imagine "modern glass cabin in a snowy forest at dusk, warm interior glow,
 # 动漫角色立绘
 mj.py imagine "1girl, silver hair, red kimono, cherry blossom petals, upper body, clean lineart, soft shading" --type NIJI_JOURNEY --model "--niji 6" --ar 2:3 --speed fast --wait
 
-# 角色设定稿（niji 7，带三视图与名称条）
-mj.py imagine "character design sheet, knight girl in blue armor, front view with small side and back head shots, white background, name plate" --type NIJI_JOURNEY --model "--niji 7" --ar 4:5 --speed relax --wait
+# 角色设定稿（niji 8.2，带三视图与名称条）
+mj.py imagine "character design sheet, knight girl in blue armor, front view with small side and back head shots, white background, name plate" --type NIJI_JOURNEY --model "--niji 8.2" --ar 4:5 --speed relax --wait
 
 # Q 版贴纸
 mj.py imagine "cute chibi cat sticker, thick white outline, pastel colors, simple background" --type NIJI_JOURNEY --model "--niji 6" --ar 1:1 --suffix "--no text" --speed fast --wait
@@ -77,7 +78,7 @@ mj.py imagine "cute chibi cat sticker, thick white outline, pastel colors, simpl
 一轮完整流程：出图 → 查看 → 放大/变体
 
 ```bash
-mj.py imagine "a red panda in a bamboo forest, morning light" --type MID_JOURNEY --model "--v 7" --ar 3:2 --speed fast --wait
+mj.py imagine "a red panda in a bamboo forest, morning light" --type MID_JOURNEY --model "--v 8.2" --ar 3:2 --speed fast --wait
 mj.py get <msg_id>              # 看 image_urls 四张图与 task.buttons 按钮
 mj.py action <msg_id> U1 --wait # 放大第 1 张
 mj.py action <msg_id> V2 --wait # 或基于第 2 张做变体

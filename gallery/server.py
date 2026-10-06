@@ -51,11 +51,14 @@ _client: httpx.AsyncClient | None = None
 # 前端可选的画图 option（值需与上游 settings 字段一致）
 BOT_TYPES = {"MID_JOURNEY", "NIJI_JOURNEY"}
 SPEEDS = {"relax", "fast", "turbo"}
-MODELS = {"", "--v 7", "--v 6.1", "--v 6", "--niji 7", "--niji 6"}
+# 2026-10 起站点已支持 MJ 8.2 / Niji 8.2（取自前端 settings 下拉）
+MODELS = {"", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6", "--niji 8.2", "--niji 7", "--niji 6"}
+MODELS_MJ = {"", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6"}
+MODELS_NIJI = {"--niji 8.2", "--niji 7", "--niji 6"}
 DEFAULT_SETTINGS = {
-    "MID_JOURNEY": {"model": "--v 7", "style": "", "stylize": 100,
+    "MID_JOURNEY": {"model": "--v 8.2", "style": "", "stylize": 100,
                     "remix": False, "variation": "high", "speed": "fast"},
-    "NIJI_JOURNEY": {"model": "--niji 7", "style": "", "stylize": 100,
+    "NIJI_JOURNEY": {"model": "--niji 8.2", "style": "", "stylize": 100,
                      "remix": False, "variation": "high", "speed": "fast"},
 }
 
@@ -184,9 +187,6 @@ async def upstream(method: str, path: str, payload: dict | None = None,
     return res
 
 
-    return res
-
-
 def settings_for(bot_type: str, overrides: dict | None = None) -> dict:
     """用户默认设置 -> 本次 overrides 合并后的 settings（同上游 /api/user/auth 的字段）。"""
     base = dict(DEFAULT_SETTINGS.get(bot_type) or DEFAULT_SETTINGS["MID_JOURNEY"])
@@ -264,6 +264,8 @@ async def models():
     return {
         "bot_types": sorted(BOT_TYPES),
         "models": sorted(MODELS),
+        "models_mj": sorted(MODELS_MJ),
+        "models_niji": sorted(MODELS_NIJI),
         "speeds": sorted(SPEEDS),
         "settings": {k: settings_for(k) for k in sorted(BOT_TYPES)},
     }
@@ -286,9 +288,9 @@ async def imagine(req: ImagineRequest):
             raise HTTPException(status_code=400, detail="画幅格式应为 宽:高，如 16:9")
         prompt = "%s --ar %s" % (prompt, ar)
 
-    # niji 只能用 niji 模型，MJ 只能用 MJ 模型，避免提交到错误的 bot
+    # niji bot 只能吃 niji 模型；MJ bot 两者都收（与站点 settings 下拉一致）
     model = req.model
-    if model and (model.startswith("--niji")) != (bot_type == "NIJI_JOURNEY"):
+    if model and bot_type == "NIJI_JOURNEY" and model not in MODELS_NIJI:
         raise HTTPException(status_code=400,
                             detail="模型 %s 与 bot 类型 %s 不匹配" % (model, bot_type))
 

@@ -200,8 +200,8 @@
       <div id="genBtnWrap">
         <button id="genBtn" class="primary">生成图片</button>
         <div id="genMenu">
-          <button data-preset="mj">Midjourney v7<small>通用写实 / 概念插画</small></button>
-          <button data-preset="niji">Niji 7<small>动漫插画风格</small></button>
+          <button data-preset="mj">Midjourney v8.2<small>通用写实 / 概念插画</small></button>
+          <button data-preset="niji">Niji 8.2<small>动漫插画风格</small></button>
         </div>
       </div>
       <select id="pageSize">
@@ -239,9 +239,11 @@
         <div class="field">
           <label for="genModel">模型</label>
           <select id="genModel">
-            <option value="MID_JOURNEY|--v 7" selected>Midjourney v7</option>
+            <option value="MID_JOURNEY|--v 8.2" selected>Midjourney v8.2</option>
+            <option value="MID_JOURNEY|--v 7">Midjourney v7</option>
             <option value="MID_JOURNEY|--v 6.1">Midjourney v6.1</option>
-            <option value="MID_JOURNEY|--v 6">Midjourney v6</option>
+            <option value="MID_JOURNEY|--v 6.0">Midjourney v6.0</option>
+            <option value="NIJI_JOURNEY|--niji 8.2">Niji 8.2（动漫）</option>
             <option value="NIJI_JOURNEY|--niji 7">Niji 7（动漫）</option>
             <option value="NIJI_JOURNEY|--niji 6">Niji 6（动漫）</option>
           </select>
@@ -493,8 +495,8 @@ async function loadMore(reset = false) {
 /* ---------------- 生成图片弹窗 ---------------- */
 function openGen(preset) {
   const sel = $('genModel');
-  if (preset === 'niji') sel.value = 'NIJI_JOURNEY|--niji 7';
-  else if (preset === 'mj') sel.value = 'MID_JOURNEY|--v 7';
+  if (preset === 'niji') sel.value = 'NIJI_JOURNEY|--niji 8.2';
+  else if (preset === 'mj') sel.value = 'MID_JOURNEY|--v 8.2';
   $('genStatus').textContent = '';
   $('genMask').classList.add('show');
   setTimeout(() => $('genPrompt').focus(), 30);

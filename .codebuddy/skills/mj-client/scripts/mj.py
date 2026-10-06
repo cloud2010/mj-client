@@ -24,9 +24,9 @@ BASE_URL = os.environ.get("MJ_BASE_URL", "https://zhongwenmj.aitoptop.cn")
 DEFAULT_CACHE_DIR = Path(os.environ.get("MJ_CACHE_DIR", Path.home() / ".mj-client"))
 DEFAULT_TIMEOUT = 30
 
-# 前端默认设置（settings-IJ_D2SJ8.js）
+# 前端默认设置兜底（账号里没保存设置时用；实际以 /api/user/auth 返回的 settings 为准）
 DEFAULT_SETTINGS_MJ = {
-    "model": "",
+    "model": "--v 8.2",
     "style": "",
     "stylize": 100,
     "remix": False,
@@ -34,13 +34,19 @@ DEFAULT_SETTINGS_MJ = {
     "speed": "fast",
 }
 DEFAULT_SETTINGS_NIJI = {
-    "model": "--niji 5",
+    "model": "--niji 6",
     "style": "",
     "stylize": 100,
     "remix": False,
     "variation": "high",
     "speed": "fast",
 }
+
+# 站点 settings 下拉里可选的模型（2026-10 起支持 MJ 8.2 / Niji 8.2）
+MODELS_MJ = ["", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6",
+             "--v 5.2", "--v 5.1", "--v 5", "--v 4", "--v 3", "--v 2", "--v 1"]
+MODELS_NIJI = ["--niji 8.2", "--niji 7", "--niji 6", "--niji 5", "--niji 4"]
+SUPPORTED_MODELS = set(MODELS_MJ) | set(MODELS_NIJI)
 
 TERMINAL_STATUS = {"SUCCESS", "FAILURE", "CANCEL"}
 
@@ -159,7 +165,7 @@ class MJClient:
     # ---------- HTTP ----------
 
     def request(self, method: str, path: str, body=None, auth: bool = True,
-                content_type: str = "application/json") -> dict:
+                content_type: str = "application/json", require_success: bool = True) -> dict:
         url = path if path.startswith("http") else self.base_url + path
         data = None
         if body is not None:
@@ -186,7 +192,7 @@ class MJClient:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     raw = resp.read().decode("utf-8", "replace")
                 parsed = json.loads(raw)
-            if not parsed.get("success"):
+            if require_success and not parsed.get("success"):
                 raise MJError("API %s: %s" % (parsed.get("code"), parsed.get("msg")), parsed)
             return parsed
         except urllib.error.URLError as exc:
@@ -201,12 +207,12 @@ class MJClient:
             req.add_header("Authorization", "Bearer " + self.ensure_token())
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 parsed = json.loads(resp.read().decode("utf-8", "replace"))
-        if not parsed.get("success"):
+        if require_success and not parsed.get("success"):
             raise MJError("API %s: %s" % (parsed.get("code"), parsed.get("msg")), parsed)
         return parsed
 
-    def get(self, path, auth=True):
-        return self.request("GET", path, auth=auth)
+    def get(self, path, auth=True, require_success=True):
+        return self.request("GET", path, auth=auth, require_success=require_success)
 
     def post(self, path, body=None, auth=True):
         return self.request("POST", path, body if body is not None else {}, auth=auth)
@@ -343,14 +349,42 @@ class MJClient:
             raise MJError("上传成功但未返回文件地址: %s" % json.dumps(raw, ensure_ascii=False)[:500])
         return url
 
-    def resolve_target(self, value: str) -> str:
+    def upload_file_direct(self, file_path: str) -> str:
+        """POST /api/file/upload：直传到站点自身存储（multipart，字段名 file）。
+
+        注意：该接口返回的 file_url 形如 https://zhongwenmj.aitoptop.cn/static/<user>_<name>，
+        实测公网路径暂未开放（404），默认仍走 upload_file()（OSS）。
+        """
+        path = Path(file_path)
+        if not path.is_file():
+            raise MJError("文件不存在: %s" % file_path)
+        ctype = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp", ".gif": "image/gif",
+        }.get(path.suffix.lower(), "application/octet-stream")
+        body, content_type = _multipart({}, "file", path.name, path.read_bytes(), ctype)
+        raw = self.request("POST", "/api/file/upload", body, content_type=content_type)
+        data = raw.get("data") or {}
+        url = data.get("file_url") or raw.get("file_url")
+        if not url:
+            raise MJError("上传成功但未返回文件地址: %s" % json.dumps(raw, ensure_ascii=False)[:500])
+        return url
+
+    def upload(self, file_path: str, method: str = "oss") -> str:
+        """按 method 选择上传通道：oss（默认，可用）/ direct（新接口，URL 暂不可达）。"""
+        if method == "direct":
+            return self.upload_file_direct(file_path)
+        return self.upload_file(file_path)
+
+    def resolve_target(self, value: str, method: str = "oss") -> str:
         """本地路径先上传，否则按 URL 原样返回。"""
         if value.startswith(("http://", "https://")):
             return value
-        return self.upload_file(value)
+        return self.upload(value, method)
 
 
-def _multipart(fields: dict, file_field: str, filename: str, content: bytes):
+def _multipart(fields: dict, file_field: str, filename: str, content: bytes,
+               file_content_type: str = "application/octet-stream"):
     boundary = "----mjFormBoundary" + uuid.uuid4().hex
     buf = bytearray()
     for key, value in fields.items():
@@ -359,7 +393,7 @@ def _multipart(fields: dict, file_field: str, filename: str, content: bytes):
         buf += str(value).encode("utf-8") + b"\r\n"
     buf += ("--%s\r\n" % boundary).encode()
     buf += ('Content-Disposition: form-data; name="%s"; filename="%s"\r\n' % (file_field, filename)).encode("utf-8")
-    buf += b"Content-Type: application/octet-stream\r\n\r\n"
+    buf += ("Content-Type: %s\r\n\r\n" % file_content_type).encode("utf-8")
     buf += content + b"\r\n"
     buf += ("--%s--\r\n" % boundary).encode()
     return bytes(buf), "multipart/form-data; boundary=" + boundary
@@ -385,6 +419,14 @@ def _settings_from_args(args) -> dict:
     }.items() if v is not None}
 
 
+def _warn_unknown_model(model: str | None) -> None:
+    """模型值不在站点下拉列表里时给个提示（不阻断，MJ 仍可能接受）。"""
+    if model and model not in SUPPORTED_MODELS:
+        print("[warn] 模型 %s 不在已知列表中（MJ: %s / Niji: %s），仍会原样提交。" % (
+            model, ", ".join(m or "(默认)" for m in MODELS_MJ[:6]), ", ".join(MODELS_NIJI)),
+            file=sys.stderr)
+
+
 def _maybe_wait(client: MJClient, res: dict, wait: bool, interval: int, timeout: int):
     """提交任务后，若返回 msg_id 且需要等待，则轮询到终态。"""
     info = res.get("data") or {}
@@ -408,6 +450,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("auth", help="登录并缓存 token（同时返回配额与默认设置）")
     sub.add_parser("app-info", help="GET /api/app/info 首页信息")
     sub.add_parser("me", help="GET /api/user/info 账户与配额")
+    sub.add_parser("models", help="列出可选模型（含 --v 8.2 / --niji 8.2）及账号默认设置")
 
     p = sub.add_parser("list", help="POST /api/msg/list 消息列表")
     p.add_argument("--page-size", type=int, default=10)
@@ -434,6 +477,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("describe", help="以图生文（图片 URL 或本地路径）")
     p.add_argument("image")
     _settings_args(p)
+    p.add_argument("--upload-method", choices=["oss", "direct"], default="oss",
+                   help="本地图上传通道（默认 oss；direct 走新的 /api/file/upload）")
     p.add_argument("--wait", action="store_true")
     p.add_argument("--interval", type=int, default=5)
     p.add_argument("--timeout", type=int, default=900)
@@ -441,6 +486,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("blend", help="图片融合（2~5 张，URL 或本地路径）")
     p.add_argument("images", nargs="+")
     _settings_args(p)
+    p.add_argument("--upload-method", choices=["oss", "direct"], default="oss",
+                   help="本地图上传通道（默认 oss；direct 走新的 /api/file/upload）")
     p.add_argument("--wait", action="store_true")
     p.add_argument("--interval", type=int, default=5)
     p.add_argument("--timeout", type=int, default=900)
@@ -480,8 +527,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("delete", help="DELETE /api/msg/delete/{id}")
     p.add_argument("msg_id")
 
-    p = sub.add_parser("upload", help="上传本地图片到 OSS 并返回 URL")
+    p = sub.add_parser("upload", help="上传本地图片并返回 URL")
     p.add_argument("file")
+    p.add_argument("--method", choices=["oss", "direct"], default="oss",
+                   help="oss=阿里云直传（默认，返回的 URL 可直接用）；"
+                        "direct=新的 /api/file/upload（返回的 /static/ URL 目前公网 404）")
 
     p = sub.add_parser("raw", help="直接调用任意接口")
     p.add_argument("method", choices=["GET", "POST", "DELETE", "PUT"])
@@ -522,13 +572,21 @@ def main(argv=None) -> int:
             jprint(client.login(force=True))
             return 0
         if args.cmd == "app-info":
-            jprint(client.get("/api/app/info", auth=False))
+            # 该接口响应没有 success 字段，跳过信封校验
+            jprint(client.get("/api/app/info", auth=False, require_success=False))
             return 0
 
         client.ensure_token()
 
         if args.cmd == "me":
             jprint(client.get("/api/user/info"))
+
+        elif args.cmd == "models":
+            jprint({
+                "MID_JOURNEY": MODELS_MJ,
+                "NIJI_JOURNEY": MODELS_NIJI,
+                "saved_settings": client._state.get("settings") or {},
+            })
 
         elif args.cmd == "list":
             collected, before, pagination = [], args.before, None
@@ -559,16 +617,17 @@ def main(argv=None) -> int:
                 prompt = "%s --ar %s" % (prompt.strip(), args.ar)
             if args.suffix:
                 prompt = "%s %s" % (prompt.strip(), args.suffix.strip())
+            _warn_unknown_model(args.model)
             res = client.imagine(prompt, args.type, _settings_from_args(args))
             jprint(_maybe_wait(client, res, args.wait, args.interval, args.timeout))
 
         elif args.cmd == "describe":
-            url = client.resolve_target(args.image)
+            url = client.resolve_target(args.image, args.upload_method)
             res = client.describe(url, args.type, _settings_from_args(args))
             jprint(_maybe_wait(client, res, args.wait, args.interval, args.timeout))
 
         elif args.cmd == "blend":
-            urls = [client.resolve_target(i) for i in args.images]
+            urls = [client.resolve_target(i, args.upload_method) for i in args.images]
             res = client.blend(urls, args.type, _settings_from_args(args))
             jprint(_maybe_wait(client, res, args.wait, args.interval, args.timeout))
 
@@ -630,7 +689,7 @@ def main(argv=None) -> int:
             jprint(client.delete_message(args.msg_id))
 
         elif args.cmd == "upload":
-            jprint({"file_url": client.upload_file(args.file)})
+            jprint({"file_url": client.upload(args.file, args.method), "method": args.method})
 
         elif args.cmd == "raw":
             body = None

@@ -21,7 +21,7 @@
 2. 返回 `data.token`（JWT，约 7 天有效）、`data.username`、`data.user_info.dc_username`、`data.user_info.settings.{MID_JOURNEY,NIJI_JOURNEY}`。
 3. 后续请求带 Bearer token。缓存 token 到本地，过期前重新 auth。
 
-## 接口清单（共 7 个端点）
+## 接口清单（共 9 个端点，2026-10 复核）
 
 | # | 方法 | 路径 | 说明 |
 |---|------|------|------|
@@ -33,10 +33,13 @@
 | 6 | POST | `/api/msg/interaction` | **主接口**：绘图/变体/放大/重绘/融合/以图生文/取消/取种子/聊天 |
 | 7 | DELETE | `/api/msg/delete/{msg_id}` | 删除消息 |
 | 8 | POST | `/api/file/oss/signature` | 获取阿里云 OSS 直传签名（用于上传本地图片） |
+| 9 | POST | `/api/file/upload` | **新增**：multipart 直接上传图片到站点自身存储（前端尚未使用） |
+| — | POST | `/api/file/oss/callback` | OSS 上传回调，内部接口（未带 OSS 签名头时返回 `missing oss signature headers`） |
 
 ### 1. GET /api/app/info
 
-无需鉴权。返回 `{"notice": "...", "home_info": {"home_title","home_content","qr_src","qr_title","qr_tip"}}`。
+无需鉴权，响应**没有 `success` 字段**（只有 `notice` / `home_info`），客户端不要按统一信封校验。
+返回 `{"notice": "...", "home_info": {"home_title","home_content","qr_src","qr_title","qr_tip"}}`。
 
 ### 2. POST /api/user/auth
 
@@ -94,13 +97,19 @@
 {"model": "--v 7", "style": "", "stylize": 100, "remix": false, "variation": "high", "speed": "fast"}
 ```
 
-- `model`：`""` 默认 / `--v 7` / `--v 6.1` / `--niji 6` / `--niji 7` 等
+- `model`：服务端接受的取值见下方「模型清单」（2026-10 起支持 `--v 8.2` / `--niji 8.2`）
+- 传了不存在的值（如 `--v 9`）时接口仍返回 200，任务会在 MJ 侧变成 `FAILURE`。
 - `style`：对应 `--style <value>`
 - `stylize`：0~1000，对应 `--s <n>`
 - `speed`：`relax` / `fast` / `turbo`，对应 `--relax` / `--fast` / `--turbo`
 - `variation`：`high` / `low`；`remix`：布尔
 - 服务端会保存用户设置（`/api/user/auth` 返回），调用时建议沿用用户设置再覆盖。
 - 画幅等其它参数（`--ar 16:9`、`--no xxx`、`--style raw`）直接拼在 `prompt` 末尾。
+
+#### 模型清单（取自前端 `assets/settings-*.js` 的 `A`（MJ）与 `U`（Niji）两个下拉数组）
+
+- MJ（`MID_JOURNEY`）：`""`（站点默认 V5.2）、`--v 8.2`、`--v 7`、`--v 6.1`、`--v 6.0`、`--niji 7`、`--niji 6`、`--v 5.2`、`--v 5.1`、`--niji 5`、`--v 5`、`--niji 4`、`--v 4`、`--v 3`、`--v 2`、`--v 1`
+- Niji（`NIJI_JOURNEY`）：`--niji 4`、`--niji 5`、`--niji 6`、`--niji 7`、`--niji 8.2`
 
 ### 7. DELETE /api/msg/delete/{msg_id}
 
@@ -129,6 +138,21 @@
 | `file` | 文件二进制 |
 
 回调响应为 JSON，文件地址在 `data.file_url`。支持 `.png/.jpg/.jpeg/.webp`。
+
+### 9. POST /api/file/upload（新增，2026-10 发现）
+
+`multipart/form-data`，字段名 `file`，需 Bearer token：
+
+```bash
+curl -X POST https://zhongwenmj.aitoptop.cn/api/file/upload \
+  -H "Authorization: Bearer $TOKEN" -F "file=@a.png;type=image/png"
+```
+
+→ `{"code":200,"msg":"请求成功","data":{"file_url":"https://zhongwenmj.aitoptop.cn/static/<用户名>_<原文件名>"}}`
+
+- 字段名不是 `file` 时返回 `{"code":1001,"msg":"Field required"}`
+- **已知缺陷**：返回的 `/static/...` URL 在公网上是 404（后端 `http://43.134.16.95:8000/static/...` 可以取到文件，
+  说明 nginx 尚未代理 `/static/`）。因此正式出图仍走第 8 条的 OSS 直传。
 
 ## 消息对象结构
 

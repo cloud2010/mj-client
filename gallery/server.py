@@ -1,6 +1,6 @@
 """MJ 图库本地服务（FastAPI 版）。
 
-为 gallery/index.html 提供两个能力：
+为 gallery/index.html（含外链的 app.css / app.js）提供能力：
 1. `GET /api/list` —— 代理 zhongwenmj 的消息列表接口（自动用 Auth Code 换 token）
 2. `GET /dl`       —— 代理下载原图并加 Content-Disposition（原图 CDN 无 CORS 头，
                       浏览器无法直接 fetch 成 Blob，必须由同域服务端转发）
@@ -42,6 +42,12 @@ INDEX_FILE = HERE / "index.html"
 DEFAULT_PORT = 8321
 UPSTREAM_TIMEOUT = 30.0
 DOWNLOAD_TIMEOUT = 120.0
+# 扫描最近多少条消息来找进行中的任务（站点并发上限 2，取 12 足够）
+TASK_SCAN_SIZE = 12
+
+# 消息状态：未开始 / 已提交 / 进行中 都算"进行中"；后三者为终态
+ACTIVE_STATUS = {"NOT_START", "SUBMITTED", "IN_PROGRESS"}
+TERMINAL_STATUS = {"SUCCESS", "FAILURE", "CANCEL"}
 
 _token_cache: dict[str, Any] = {"token": None, "exp": 0.0}
 # 服务端保存的用户默认设置（登录时从 user_info.settings 读取），提交任务时作为基底
@@ -240,7 +246,26 @@ app = FastAPI(title="MJ Gallery", version="1.0", lifespan=lifespan)
 async def index():
     if not INDEX_FILE.is_file():
         raise HTTPException(status_code=404, detail="index.html 不存在")
-    return FileResponse(INDEX_FILE, media_type="text/html; charset=utf-8")
+    return FileResponse(INDEX_FILE, media_type="text/html; charset=utf-8",
+                        headers={"Cache-Control": "no-cache"})
+
+
+def _asset(name: str, media_type: str) -> FileResponse:
+    """只暴露页面用到的两个静态文件，避免整个目录被下载。"""
+    path = HERE / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="%s 不存在" % name)
+    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/app.css", include_in_schema=False)
+async def app_css():
+    return _asset("app.css", "text/css; charset=utf-8")
+
+
+@app.get("/app.js", include_in_schema=False)
+async def app_js():
+    return _asset("app.js", "application/javascript; charset=utf-8")
 
 
 @app.get("/api/list", response_model=MessageList, summary="最近生成的消息列表")
@@ -251,6 +276,51 @@ async def message_list(
     res = await upstream("POST", "/api/msg/list", {"page_size": page_size, "before": before})
     data = res.get("data") or {}
     return MessageList(list=data.get("list") or [], pagination=data.get("pagination") or {})
+
+
+def _task_view(msg: dict) -> dict:
+    """把上游消息裁剪成前端画进度条需要的字段。"""
+    task = msg.get("task") or {}
+    prompt = task.get("prompt_en") or task.get("prompt") or msg.get("message_content") or ""
+    return {
+        "id": msg.get("id"),
+        "status": msg.get("status") or task.get("status") or "",
+        "type": msg.get("type") or "",
+        "action": msg.get("action") or task.get("action") or "",
+        "progress": task.get("progress"),
+        "speed": task.get("real_speed_mode") or task.get("speed") or "",
+        "model": task.get("model") or "",
+        "prompt": re.sub(r"\*\*", "", str(prompt)).strip(),
+        "submit_time": msg.get("submit_time") or 0,
+        "start_time": msg.get("start_time") or 0,
+        "finish_time": msg.get("finish_time") or 0,
+        "fail_reason": task.get("fail_reason") or "",
+    }
+
+
+@app.get("/api/tasks", summary="进行中的任务及其进度")
+async def tasks(ids: str = Query("", description="额外精确轮询的消息 id，逗号分隔（提交后跟踪用）")):
+    """合并两路数据：ids 精确查询（含已结束的，供前端提示完成）+ 最近消息里的进行中任务。"""
+    wanted = [int(p) for p in (x.strip() for x in ids.split(",")) if p.isdigit()][:20]
+
+    found: dict[Any, dict] = {}
+    if wanted:
+        res = await upstream("POST", "/api/msg/ids", {"msg_ids": wanted})
+        for msg in (res.get("data") or []):
+            view = _task_view(msg)
+            if view["id"] is not None:
+                found[view["id"]] = view
+
+    res = await upstream("POST", "/api/msg/list", {"page_size": TASK_SCAN_SIZE, "before": 0})
+    for msg in ((res.get("data") or {}).get("list") or []):
+        if msg.get("status") in ACTIVE_STATUS:
+            view = _task_view(msg)
+            found.setdefault(view["id"], view)
+
+    # 进行中的排前面（按提交时间倒序），已结束的排后面
+    out = sorted(found.values(),
+                 key=lambda v: (v["status"] in TERMINAL_STATUS, -(v["submit_time"] or 0)))
+    return {"tasks": out, "server_time": int(time.time())}
 
 
 @app.get("/api/user/info", summary="账户与剩余额度")

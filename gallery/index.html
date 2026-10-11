@@ -14,7 +14,12 @@
     document.documentElement.dataset.theme = theme;
   })();
 </script>
-<link rel="stylesheet" href="/app.css">
+<!-- 关键兜底：外链 CSS 没加载时，也不能让弹窗遮罩盖住整页 -->
+<style>
+  .modal-mask { position: fixed; inset: 0; display: none; place-items: center; }
+  .modal-mask.show { display: grid; }
+</style>
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header>
@@ -65,7 +70,7 @@
   <div class="more-wrap"><button id="more" style="display:none">加载更多</button></div>
 </main>
 
-<div class="modal-mask" id="genMask">
+<div class="modal-mask" id="genMask" hidden>
   <form class="modal" id="genForm">
     <header>
       <h2>生成图片</h2>
@@ -109,6 +114,13 @@
             <option value="turbo">turbo（极速）</option>
           </select>
         </div>
+        <div class="field">
+          <label for="genHd">高清 HD</label>
+          <select id="genHd">
+            <option value="0" selected>关闭（不加参数）</option>
+            <option value="1">开启（追加 --hd）</option>
+          </select>
+        </div>
       </div>
       <div class="field">
         <label for="genStylize">风格化 --s：<b id="genStylizeVal">200</b></label>
@@ -116,7 +128,7 @@
           <input type="range" id="genStylize" min="0" max="1000" step="50" value="200">
         </div>
       </div>
-      <p class="hint" id="genHint">提示：画幅 / 风格化由表单生成，提示词里不必再写 --ar / --s。</p>
+      <p class="hint" id="genHint">提示：画幅 / 风格化 / 高清由表单生成，提示词里不必再写 --ar / --s / --hd。</p>
     </div>
     <div class="actions">
       <span class="hint" id="genStatus"></span>
@@ -125,7 +137,7 @@
   </form>
 </div>
 
-<div class="modal-mask" id="pvMask">
+<div class="modal-mask" id="pvMask" hidden>
   <div class="pv">
     <div class="pv-stage loading" id="pvStage">
       <img id="pvImg" alt="预览图">
@@ -144,6 +156,6 @@
 
 <div id="toast"></div>
 
-<script src="/app.js" defer></script>
+<script src="app.js" defer></script>
 </body>
 </html>

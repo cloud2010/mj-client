@@ -219,6 +219,7 @@ class ImagineRequest(BaseModel):
     stylize: int | None = Field(None, ge=0, le=1000, description="--s 风格化值")
     variation: str | None = Field(None, description="high / low")
     ar: str | None = Field(None, description="画幅，如 16:9；留空则不加 --ar")
+    hd: bool | None = Field(None, description="True 时在提示词末尾追加 --hd（高清）")
 
 
 # ------------------------------ 应用 ------------------------------
@@ -357,6 +358,8 @@ async def imagine(req: ImagineRequest):
         if not re.fullmatch(r"\d{1,2}:\d{1,2}", ar):
             raise HTTPException(status_code=400, detail="画幅格式应为 宽:高，如 16:9")
         prompt = "%s --ar %s" % (prompt, ar)
+    if req.hd:
+        prompt = "%s --hd" % prompt
 
     # niji bot 只能吃 niji 模型；MJ bot 两者都收（与站点 settings 下拉一致）
     model = req.model

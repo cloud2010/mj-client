@@ -251,7 +251,7 @@ function taskCard(t, now) {
       <span class="tid">#${t.id}</span>
     </div>
     <p class="task-prompt" title="${escapeHtml(prompt)}">${escapeHtml(prompt || '（无提示词）')}</p>
-    <div class="bar"><i class="${known ? '' : 'indet'}"${known ? ` style="width:${pct}%"` : ''}></i></div>
+    <div class="task-bar"><i class="${known ? '' : 'indet'}"${known ? ` style="width:${pct}%"` : ''}></i></div>
     <div class="task-foot">
       <span>进度 <b>${known ? pct + '%' : '等待中'}</b></span>
       <span>已用时 <b>${duration(now - (t.start_time || t.submit_time || 0))}</b></span>
@@ -405,6 +405,7 @@ $('genForm').addEventListener('submit', async (e) => {
     ar: $('genAr').value,
     speed: $('genSpeed').value,
     stylize: +$('genStylize').value,
+    hd: $('genHd').value === '1',
   };
   const btn = $('genSubmit');
   btn.disabled = true;

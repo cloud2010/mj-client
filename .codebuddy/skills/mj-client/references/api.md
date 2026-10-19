@@ -104,7 +104,7 @@
 - `speed`：`relax` / `fast` / `turbo`，对应 `--relax` / `--fast` / `--turbo`
 - `variation`：`high` / `low`；`remix`：布尔
 - 服务端会保存用户设置（`/api/user/auth` 返回），调用时建议沿用用户设置再覆盖。
-- 画幅等其它参数（`--ar 16:9`、`--no xxx`、`--style raw`）直接拼在 `prompt` 末尾。
+- 画幅等其它参数（`--ar 16:9`、`--no xxx`、`--raw`）直接拼在 `prompt` 末尾。写实风格用 `--raw`；写成 `--style raw` 上游会报错。
 
 #### 模型清单（取自前端 `assets/settings-*.js` 的 `A`（MJ）与 `U`（Niji）两个下拉数组）
 

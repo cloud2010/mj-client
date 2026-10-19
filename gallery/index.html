@@ -84,7 +84,7 @@
     <div class="body">
       <div class="field">
         <label for="genPrompt">提示词</label>
-        <textarea id="genPrompt" placeholder="描述你想生成的画面…&#10;额外参数（如 --no xxx --style raw）可直接写在末尾"></textarea>
+        <textarea id="genPrompt" placeholder="描述你想生成的画面…&#10;额外参数（如 --no xxx --raw）可直接写在末尾"></textarea>
       </div>
       <div class="row">
         <div class="field">
@@ -139,10 +139,10 @@
           </select>
         </div>
         <div class="field">
-          <label for="genRaw">写实风格 --style raw</label>
+          <label for="genRaw">写实风格 --raw</label>
           <select id="genRaw">
             <option value="0" selected>关闭（不加参数）</option>
-            <option value="1">开启（追加 --style raw）</option>
+            <option value="1">开启（追加 --raw）</option>
           </select>
         </div>
         <div class="field">
@@ -165,7 +165,7 @@
           <input type="range" id="genStylize" min="0" max="1000" step="50" value="200">
         </div>
       </div>
-      <p class="hint" id="genHint">提示：画幅 / 风格化 / 高清 / --q / --style raw / --chaos 由表单生成，提示词里不必再重复写这些参数。</p>
+      <p class="hint" id="genHint">提示：画幅 / 风格化 / 高清 / --q / --raw / --chaos 由表单生成，提示词里不必再重复写这些参数。</p>
     </div>
     <div class="actions">
       <span class="hint" id="genStatus"></span>

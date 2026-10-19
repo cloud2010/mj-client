@@ -469,7 +469,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("prompt")
     _settings_args(p)
     p.add_argument("--ar", help='追加画幅后缀，如 "16:9"')
-    p.add_argument("--suffix", help="追加任意 MJ 参数后缀，如 '--no text --style raw'")
+    p.add_argument("--suffix", help="追加任意 MJ 参数后缀，如 '--no text --raw'（注意写 --raw，不是 --style raw）")
     p.add_argument("--wait", action="store_true")
     p.add_argument("--interval", type=int, default=5)
     p.add_argument("--timeout", type=int, default=900)

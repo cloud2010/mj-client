@@ -156,7 +156,7 @@ python scripts/mj.py action 3222824 V2 --wait   # 或对第 2 张做变体
 
 - `--type` 需与被操作消息的 `type` 一致（`MID_JOURNEY` / `NIJI_JOURNEY`），`action`/`modal`/`seed`/`cancel` 会自动沿用消息自带的 type。示例见上文「`--type` 用法」。
 - `--speed`：relax（慢、便宜）、fast、turbo；出图消耗额度，`me` 可查剩余。默认沿用账号保存的设置（该账号 MID_JOURNEY 现为 `--v 8.2` + relax，NIJI_JOURNEY 为 `--niji 6`），要其它版本请显式 `--model`（`--v 7` / `--v 6.1` / `--niji 8.2` …）。
-- `--ar 16:9`、`--no text`、`--style raw` 等其它参数用 `--suffix` 追加或直接写在 prompt 末尾。
+- `--ar 16:9`、`--no text`、`--raw` 等其它参数用 `--suffix` 追加或直接写在 prompt 末尾（写实风格拼 `--raw`，不要拼 `--style raw`）。
 - 输出统一为 JSON（stdout），失败时 stderr 打印 `ERROR: API <code>: <msg>` 并以非 0 退出。
 
 ## 参考

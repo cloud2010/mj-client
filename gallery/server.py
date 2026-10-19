@@ -285,7 +285,7 @@ class ImagineRequest(BaseModel):
     ar: str | None = Field(None, description="画幅，如 16:9；留空则不加 --ar")
     hd: bool | None = Field(None, description="True 时在提示词末尾追加 --hd（高清）")
     quality: str | None = Field(None, description="--q 质量：0.25 / 0.5 / 1 / 2")
-    style_raw: bool | None = Field(None, description="True 时追加 --style raw（写实风格）")
+    style_raw: bool | None = Field(None, description="True 时追加 --raw（写实风格）")
     chaos: int | None = Field(None, ge=0, le=100, description="--chaos 变化度 0-100")
 
 
@@ -493,7 +493,8 @@ async def imagine(req: ImagineRequest):
                                 detail="--q 只能是 %s" % " / ".join(QUALITY_VALUES))
         prompt = "%s --q %s" % (prompt, quality)
     if req.style_raw:
-        prompt = "%s --style raw" % prompt
+        # 注意：这里必须是 --raw；写成 --style raw 上游会报错
+        prompt = "%s --raw" % prompt
     if req.chaos is not None:
         prompt = "%s --chaos %d" % (prompt, req.chaos)
 

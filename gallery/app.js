@@ -1,5 +1,13 @@
-const state = { before: 0, pageSize: 20, loading: false, done: false, total: 0, grandTotal: 0 };
+const state = { before: 0, pageSize: 20, loading: false, done: false, total: 0, grandTotal: 0, code: '' };
+const CODE_KEY = 'mj-auth-code';
 const $ = (id) => document.getElementById(id);
+
+/** 所有 /api 请求带上当前选中的 Auth Code key（服务端据此切换账号） */
+function apiHeaders(extra) {
+  const h = Object.assign({}, extra);
+  if (state.code) h['X-Auth-Code'] = state.code;
+  return h;
+}
 
 function toast(text) {
   const el = document.createElement('div');
@@ -137,7 +145,7 @@ function card(msg) {
     if (!confirm(`确定删除消息 #${msg.id} 吗？该消息及其图片将从服务端移除，且不可恢复。`)) return;
     el.classList.add('deleting');
     try {
-      const res = await fetch(`/api/msg/${msg.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/msg/${msg.id}`, { method: 'DELETE', headers: apiHeaders() });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
       el.remove();
@@ -178,7 +186,8 @@ async function loadMore(reset = false) {
   $('empty').style.display = $('grid').children.length ? 'none' : 'block';
   $('more').style.display = 'none';
   try {
-    const res = await fetch(`/api/list?page_size=${state.pageSize}&before=${state.before}`);
+    const res = await fetch(`/api/list?page_size=${state.pageSize}&before=${state.before}`,
+                            { headers: apiHeaders() });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
     const list = (data.list || []).filter((m) => pickImages(m).length);
@@ -277,7 +286,8 @@ async function pollTasks() {
   tasks.busy = true;
   try {
     const ids = [...tasks.watching].join(',');
-    const res = await fetch('/api/tasks' + (ids ? '?ids=' + encodeURIComponent(ids) : ''));
+    const res = await fetch('/api/tasks' + (ids ? '?ids=' + encodeURIComponent(ids) : ''),
+                            { headers: apiHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
     const now = data.server_time || Math.floor(Date.now() / 1000);
@@ -382,7 +392,10 @@ $('genBtn').addEventListener('click', (e) => {
   e.stopPropagation();
   $('genMenu').classList.toggle('show');
 });
-document.addEventListener('click', () => $('genMenu').classList.remove('show'));
+document.addEventListener('click', () => {
+  $('genMenu').classList.remove('show');
+  $('quotaMenu').classList.remove('show');
+});
 $('genMenu').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-preset]');
   if (!btn) return;
@@ -406,13 +419,16 @@ $('genForm').addEventListener('submit', async (e) => {
     speed: $('genSpeed').value,
     stylize: +$('genStylize').value,
     hd: $('genHd').value === '1',
+    quality: $('genQuality').value || null,
+    style_raw: $('genRaw').value === '1',
+    chaos: $('genChaos').value === '' ? null : +$('genChaos').value,
   };
   const btn = $('genSubmit');
   btn.disabled = true;
   $('genStatus').textContent = '提交中…';
   try {
     const res = await fetch('/api/imagine', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: apiHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
@@ -432,6 +448,98 @@ $('genForm').addEventListener('submit', async (e) => {
     btn.disabled = false;
   }
 });
+
+/* ---------------- 账号切换（Auth Code）与额度 ---------------- */
+
+/** 从服务端拉取可用 Auth Code 列表，填充切换下拉框 */
+async function loadCodes() {
+  let codes = [];
+  let def = '';
+  try {
+    const res = await fetch('/api/codes');
+    const data = await res.json();
+    codes = data.codes || [];
+    def = data.default || '';
+  } catch (e) { /* 接口不可用时保持隐藏 */ }
+  const sel = $('authCode');
+  if (!codes.length) { sel.style.display = 'none'; return; }
+  sel.innerHTML = '';
+  codes.forEach((c) => {
+    const opt = document.createElement('option');
+    opt.value = c.key;
+    opt.textContent = `${c.key} · ${c.masked}`;
+    sel.appendChild(opt);
+  });
+  let saved = null;
+  try { saved = localStorage.getItem(CODE_KEY); } catch (e) {}
+  if (!codes.some((c) => c.key === saved)) saved = def || codes[0].key;
+  sel.value = saved;
+  state.code = saved;
+  sel.style.display = '';
+  $('quotaWrap').style.display = '';
+}
+
+/** 切换账号：清空旧账号的图库与任务面板，按新账号重新加载 */
+async function switchCode(key) {
+  if (!key || key === state.code) return;
+  state.code = key;
+  try { localStorage.setItem(CODE_KEY, key); } catch (e) {}
+  tasks.watching.clear();
+  tasks.seen.clear();
+  renderTasks([], Math.floor(Date.now() / 1000));
+  $('tasksHint').textContent = '暂无进行中的任务';
+  $('count').textContent = '—';
+  $('banner').classList.remove('show');
+  await Promise.all([loadMore(true), loadQuota()]);
+  pollTasks();
+}
+
+/** 拉取当前账号的 /api/user/info，展示 /info 额度摘要 */
+async function loadQuota() {
+  const btn = $('quotaBtn');
+  const pre = $('quotaText');
+  pre.textContent = '加载中…';
+  btn.textContent = '额度 …';
+  try {
+    const res = await fetch('/api/user/info', { headers: apiHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    const text = data.content_text || '';
+    pre.textContent = text || '（上游未返回额度信息）';
+    btn.textContent = quotaSummary(text, data.quota) || '额度详情';
+  } catch (err) {
+    pre.textContent = '额度获取失败：' + err.message;
+    btn.textContent = '额度获取失败';
+  }
+}
+
+/** 从结构化 quota（优先）或 /info 文本里挑 FAST / RELAX 做摘要，全文点开弹窗看 */
+function quotaSummary(text, quota) {
+  const parts = [];
+  Object.keys(quota || {}).forEach((k) => {
+    const q = quota[k] || {};
+    if (q.available != null) {
+      const unit = q.unit === 'images' ? ' 张' : (q.unit ? ' ' + q.unit : '');
+      parts.push(k.toUpperCase() + ' 剩 ' + q.available + unit);
+    }
+  });
+  if (parts.length) return parts.join(' · ');
+  const lines = (text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const fast = lines.find((l) => /fast/i.test(l));
+  const relax = lines.find((l) => /relax/i.test(l));
+  const other = lines.find((l) => /套餐|额度|可用|remaining|turbo/i.test(l));
+  return [fast, relax].filter(Boolean).join(' · ') || other || '额度详情';
+}
+
+$('quotaBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = $('quotaMenu');
+  const opening = !menu.classList.contains('show');
+  menu.classList.toggle('show');
+  if (opening) loadQuota();  // 每次展开都取最新额度
+});
+$('quotaMenu').addEventListener('click', (e) => e.stopPropagation());
+$('authCode').addEventListener('change', (e) => switchCode(e.target.value));
 
 /* ---------------- 主题：深色 / 浅色 ---------------- */
 const THEME_KEY = 'mj-theme';
@@ -466,6 +574,10 @@ window.addEventListener('scroll', () => {
   if (window.innerHeight + window.scrollY > document.body.offsetHeight - 400) loadMore();
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pollTasks(); });
-loadMore();
-pollTasks();
-scheduleTasks();
+(async function init() {
+  await loadCodes();   // 先确定账号，再按账号加载图库 / 额度 / 任务
+  loadMore();
+  loadQuota();
+  pollTasks();
+  scheduleTasks();
+})();

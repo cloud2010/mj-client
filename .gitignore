@@ -1,6 +1,6 @@
 # 凭证与密钥 —— 切勿上传
-AUTH_CODE.txt
-auth_code.txt
+AUTH_CODE.*
+auth_code.*
 *.auth_code
 state.json
 *.token
@@ -22,6 +22,7 @@ prompts/*.json
 
 # 日志与运行时产物
 *.log
+*.pptx
 out.log
 err.log
 *.tmp

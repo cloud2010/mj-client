@@ -20,13 +20,20 @@
 
 ### 1. 配置 Auth Code（不要提交到仓库）
 
-在项目根目录创建 `AUTH_CODE.txt`，内容只有一行 Auth Code：
+在项目根目录创建 `AUTH_CODE.txt`。支持**多账号**，两种写法均可：
 
 ```bash
+# 单账号：整个文件只有一行裸 code
 echo "你的AuthCode" > AUTH_CODE.txt
+
+# 多账号：AUTHCODE_N=xxx 每行一个（# 开头为注释），名字可自定义
+cat > AUTH_CODE.txt <<'EOF'
+AUTHCODE_1=你的AuthCode1
+AUTHCODE_2=你的AuthCode2
+EOF
 ```
 
-该文件已被 `.gitignore` 排除；也可用环境变量 `MJ_AUTH_CODE` 代替。登录后的 JWT 缓存在 `~/.mj-client/state.json`（仓库外）。
+该文件已被 `.gitignore` 排除；也可用环境变量 `MJ_AUTH_CODE` 代替（单 code）。图库页面右上角可切换账号，各账号的图库、额度相互独立；命令行临时用其它账号可加 `--auth-code <CODE>`。登录后的 JWT 按 code 分桶缓存在 `~/.mj-client/state.json`（仓库外）。
 
 ### 2. 使用命令行（Skill）
 
@@ -98,6 +105,7 @@ python server.py            # 默认 http://localhost:8321，自动打开浏览�
 
 页面能力：
 
+- **多账号切换**：`AUTH_CODE.txt` 配置了多个 Auth Code 时，右上角下拉框可切换账号，图库与"进行中任务"随之切换；"额度"按钮实时显示当前账号的 FAST / RELAX 剩余（即 /info，点开看全文），选择记录在 `localStorage`。
 - 按时间倒序展示最近生成记录；四宫格消息的四张图**单击即下载对应 PNG**，悬停出现"下载 PNG / 预览"两枚按钮，预览可看大图、左右切换、新窗口打开原图。
 - **进行中的任务**面板：主界面顶部实时显示排队 / 生成中的任务（状态、进度条、已用时、失败原因），有任务时 4 秒刷新一次，空闲时 20 秒；任务完成后自动 toast 提示并刷新图库（数据来自新增的 `GET /api/tasks`）。
 - **深色 / 浅色**两套主题：右上角按钮切换，选择写入 `localStorage`，首次访问跟随系统偏好。

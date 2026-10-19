@@ -33,6 +33,11 @@
     </div>
     <div class="ctrl">
       <span class="count" id="count">—</span>
+      <select id="authCode" title="切换 Auth Code（不同账号对应不同图库与额度）" style="display:none"></select>
+      <div id="quotaWrap" style="display:none">
+        <button id="quotaBtn" class="theme-btn" title="查看当前账号剩余额度（/info）">额度 …</button>
+        <div id="quotaMenu"><pre id="quotaText"></pre></div>
+      </div>
       <div id="genBtnWrap">
         <button id="genBtn" class="primary">生成图片</button>
         <div id="genMenu">
@@ -122,13 +127,45 @@
           </select>
         </div>
       </div>
+      <div class="row">
+        <div class="field">
+          <label for="genQuality">质量 --q</label>
+          <select id="genQuality">
+            <option value="" selected>默认（不加参数）</option>
+            <option value="0.25">0.25（草稿，最省额度）</option>
+            <option value="0.5">0.5</option>
+            <option value="1">1（标准）</option>
+            <option value="2">2（高清，仅 v5.2 及更早）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="genRaw">写实风格 --style raw</label>
+          <select id="genRaw">
+            <option value="0" selected>关闭（不加参数）</option>
+            <option value="1">开启（追加 --style raw）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="genChaos">变化度 --chaos</label>
+          <select id="genChaos">
+            <option value="" selected>默认（不加参数）</option>
+            <option value="0">0（最稳定）</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+            <option value="70">70</option>
+            <option value="100">100（最多样）</option>
+          </select>
+        </div>
+      </div>
       <div class="field">
         <label for="genStylize">风格化 --s：<b id="genStylizeVal">200</b></label>
         <div class="stylize-row">
           <input type="range" id="genStylize" min="0" max="1000" step="50" value="200">
         </div>
       </div>
-      <p class="hint" id="genHint">提示：画幅 / 风格化 / 高清由表单生成，提示词里不必再写 --ar / --s / --hd。</p>
+      <p class="hint" id="genHint">提示：画幅 / 风格化 / 高清 / --q / --style raw / --chaos 由表单生成，提示词里不必再重复写这些参数。</p>
     </div>
     <div class="actions">
       <span class="hint" id="genStatus"></span>

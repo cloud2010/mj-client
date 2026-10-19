@@ -1,9 +1,13 @@
 """MJ 图库本地服务（FastAPI 版）。
 
 为 gallery/index.html（含外链的 app.css / app.js）提供能力：
-1. `GET /api/list` —— 代理 zhongwenmj 的消息列表接口（自动用 Auth Code 换 token）
-2. `GET /dl`       —— 代理下载原图并加 Content-Disposition（原图 CDN 无 CORS 头，
+1. `GET /api/codes` —— 列出 AUTH_CODE.txt 中的全部 Auth Code（多账号切换）
+2. `GET /api/list` —— 代理 zhongwenmj 的消息列表接口（自动用 Auth Code 换 token）
+3. `GET /dl`       —— 代理下载原图并加 Content-Disposition（原图 CDN 无 CORS 头，
                       浏览器无法直接 fetch 成 Blob，必须由同域服务端转发）
+
+多账号：AUTH_CODE.txt 支持 `AUTHCODE_N=xxx` 每行一个；前端带 `X-Auth-Code` 头（值为
+/api/codes 返回的 key）即可按账号出图库/额度，token 与用户设置均按 code 分桶缓存。
 
 启动：`python server.py [--port 8321] [--no-open]`，浏览器打开 http://localhost:8321
 或：`uvicorn server:app --port 8321`
@@ -12,6 +16,8 @@
 from __future__ import annotations
 
 import argparse
+import contextvars
+import html as html_mod
 import json
 import mimetypes
 import os
@@ -27,7 +33,7 @@ from typing import Any, List
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, Path as PathParam, Query
+from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -49,9 +55,13 @@ TASK_SCAN_SIZE = 12
 ACTIVE_STATUS = {"NOT_START", "SUBMITTED", "IN_PROGRESS"}
 TERMINAL_STATUS = {"SUCCESS", "FAILURE", "CANCEL"}
 
-_token_cache: dict[str, Any] = {"token": None, "exp": 0.0}
-# 服务端保存的用户默认设置（登录时从 user_info.settings 读取），提交任务时作为基底
-_settings_cache: dict[str, Any] = {}
+# 每个 Auth Code 一份 token / 用户设置：
+#   _token_cache[code] = {"token": str, "exp": float}
+#   _settings_cache[code] = {BOT_TYPE: settings}
+_token_cache: dict[str, dict[str, Any]] = {}
+_settings_cache: dict[str, dict[str, Any]] = {}
+# 请求级上下文：当前请求选中的 Auth Code key（由中间件从 X-Auth-Code 头解析）
+_current_key: contextvars.ContextVar[str] = contextvars.ContextVar("current_key", default="")
 _client: httpx.AsyncClient | None = None
 
 # 前端可选的画图 option（值需与上游 settings 字段一致）
@@ -61,6 +71,8 @@ SPEEDS = {"relax", "fast", "turbo"}
 MODELS = {"", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6", "--niji 8.2", "--niji 7", "--niji 6"}
 MODELS_MJ = {"", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6"}
 MODELS_NIJI = {"--niji 8.2", "--niji 7", "--niji 6"}
+# --q 质量可选值（MJ 官方口径；站点 settings 不含此参数，故拼进提示词）
+QUALITY_VALUES = ("0.25", "0.5", "1", "2")
 DEFAULT_SETTINGS = {
     "MID_JOURNEY": {"model": "--v 8.2", "style": "", "stylize": 100,
                     "remix": False, "variation": "high", "speed": "fast"},
@@ -75,19 +87,59 @@ class UpstreamError(Exception):
     """上游接口返回错误。"""
 
 
-def find_auth_code() -> str | None:
-    """按优先级查找 Auth Code：环境变量 -> 项目/上级目录 AUTH_CODE.txt -> 缓存目录。"""
+def _parse_auth_codes(text: str) -> List[tuple[str, str]]:
+    """解析 AUTH_CODE.txt：支持 `AUTHCODE_N=xxx` 每行一个（# 开头为注释），兼容整文件只有一个裸 code。"""
+    found: List[tuple[str, str]] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip()
+            if key and value:
+                found.append((key, value))
+        else:
+            found.append(("", line))
+    out, n = [], 0
+    for key, value in found:
+        if not key:  # 裸 code 自动编号
+            n += 1
+            key = "AUTHCODE_%d" % n
+        out.append((key, value))
+    return out
+
+
+def mask_code(code: str) -> str:
+    """脱敏展示：2610190057... -> 2610****wDbr"""
+    if len(code) <= 10:
+        return code[:2] + "****"
+    return "%s****%s" % (code[:4], code[-4:])
+
+
+# AUTH_CODE.txt 内容缓存，mtime 变了才重新读取
+_codes_cache: dict[str, Any] = {"mtime": None, "codes": []}
+
+
+def load_auth_codes() -> List[tuple[str, str]]:
+    """可用的 (key, code) 列表：环境变量 MJ_AUTH_CODE 优先（单 code），其次 AUTH_CODE.txt。"""
     env = os.environ.get("MJ_AUTH_CODE")
     if env:
-        return env.strip()
+        return [("MJ_AUTH_CODE", env.strip())]
     for root in [Path.cwd(), *HERE.parents, Path.home() / ".mj-client"]:
         for name in ("AUTH_CODE.txt", "auth_code.txt"):
             candidate = root / name
             if candidate.is_file():
-                value = candidate.read_text(encoding="utf-8").strip()
-                if value:
-                    return value
-    return None
+                try:
+                    mtime = candidate.stat().st_mtime
+                    if _codes_cache["mtime"] == mtime:
+                        return _codes_cache["codes"]
+                    codes = _parse_auth_codes(candidate.read_text(encoding="utf-8"))
+                    _codes_cache.update(mtime=mtime, codes=codes)
+                    return codes
+                except Exception:  # noqa: BLE001
+                    pass
+    return []
 
 
 def _jwt_exp(token: str) -> float:
@@ -101,40 +153,46 @@ def _jwt_exp(token: str) -> float:
         return 0.0
 
 
-def _load_cached_token() -> tuple[str, float] | None:
+def selected_code() -> str:
+    """当前请求要用的 Auth Code（中间件按 X-Auth-Code 头选择 key，缺省取第一个）。"""
+    codes = load_auth_codes()
+    if not codes:
+        raise HTTPException(
+            status_code=500,
+            detail="未找到 Auth Code：请设置 MJ_AUTH_CODE 或在项目根目录放置 AUTH_CODE.txt")
+    known = dict(codes)
+    return known.get(_current_key.get("")) or codes[0][1]
+
+
+def _load_cached_token(code: str) -> tuple[str, float] | None:
+    cached = _token_cache.get(code)
+    if cached and cached.get("token") and time.time() < cached["exp"] - 60:
+        return cached["token"], cached["exp"]
     try:
         state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-        token, exp = state.get("token"), float(state.get("token_exp") or 0)
+    except Exception:  # noqa: BLE001
+        return None
+    entry = (state.get("tokens") or {}).get(code)
+    if not entry and state.get("auth_code") == code:  # 兼容旧版单 code 状态文件
+        entry = state
+    if entry:
+        token, exp = entry.get("token"), float(entry.get("token_exp") or 0)
         if token and time.time() < exp - 60:
+            _token_cache[code] = {"token": token, "exp": exp}
+            _settings_cache[code] = entry.get("settings") or {}
             return token, exp
-    except Exception:
-        pass
     return None
 
 
 async def get_token(force: bool = False) -> str:
     """返回有效 token：优先复用缓存，否则用 Auth Code 重新登录。"""
+    code = selected_code()
     if not force:
-        if _token_cache["token"] and time.time() < _token_cache["exp"] - 60:
-            return _token_cache["token"]
-        cached = _load_cached_token()
+        cached = _load_cached_token(code)
         if cached:
-            _token_cache.update(token=cached[0], exp=cached[1])
-            try:  # 复用缓存 token 时，顺带取回上次保存的用户设置
-                state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-                _settings_cache.clear()
-                _settings_cache.update(state.get("settings") or {})
-            except Exception:
-                pass
             return cached[0]
     if force:
-        _token_cache.update(token=None, exp=0.0)
-
-    code = find_auth_code()
-    if not code:
-        raise HTTPException(
-            status_code=500,
-            detail="未找到 Auth Code：请设置 MJ_AUTH_CODE 或在项目根目录放置 AUTH_CODE.txt")
+        _token_cache.pop(code, None)
 
     assert _client is not None
     try:
@@ -151,20 +209,26 @@ async def get_token(force: bool = False) -> str:
     data = res["data"]
     token = data["token"]
     exp = _jwt_exp(token) or time.time() + 86400 * 6
-    _token_cache.update(token=token, exp=exp)
-    _settings_cache.clear()
-    _settings_cache.update((data.get("user_info") or {}).get("settings") or {})
-    try:
+    user_info = data.get("user_info") or {}
+    _token_cache[code] = {"token": token, "exp": exp}
+    _settings_cache[code] = user_info.get("settings") or {}
+    try:  # 状态文件按 code 分桶；顶层字段保留最近使用的 code（兼容 mj.py 读取）
+        state: dict[str, Any] = {}
+        try:
+            state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            pass
+        entry = {"token": token, "token_exp": exp, "username": data.get("username"),
+                 "dc_username": user_info.get("dc_username"),
+                 "settings": user_info.get("settings") or {}}
+        tokens = state.get("tokens") or {}
+        tokens[code] = entry
+        state.update(entry)
+        state["auth_code"] = code
+        state["tokens"] = tokens
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        STATE_FILE.write_text(json.dumps({
-            "auth_code": code,
-            "token": token,
-            "token_exp": exp,
-            "username": data.get("username"),
-            "dc_username": (data.get("user_info") or {}).get("dc_username"),
-            "settings": (data.get("user_info") or {}).get("settings") or {},
-        }, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
+        STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:  # noqa: BLE001
         pass
     return token
 
@@ -194,9 +258,9 @@ async def upstream(method: str, path: str, payload: dict | None = None,
 
 
 def settings_for(bot_type: str, overrides: dict | None = None) -> dict:
-    """用户默认设置 -> 本次 overrides 合并后的 settings（同上游 /api/user/auth 的字段）。"""
+    """当前账号默认设置 -> 本次 overrides 合并后的 settings（同上游 /api/user/auth 的字段）。"""
     base = dict(DEFAULT_SETTINGS.get(bot_type) or DEFAULT_SETTINGS["MID_JOURNEY"])
-    base.update(_settings_cache.get(bot_type) or {})
+    base.update((_settings_cache.get(selected_code()) or {}).get(bot_type) or {})
     for key, value in (overrides or {}).items():
         if value is not None:
             base[key] = value
@@ -220,6 +284,9 @@ class ImagineRequest(BaseModel):
     variation: str | None = Field(None, description="high / low")
     ar: str | None = Field(None, description="画幅，如 16:9；留空则不加 --ar")
     hd: bool | None = Field(None, description="True 时在提示词末尾追加 --hd（高清）")
+    quality: str | None = Field(None, description="--q 质量：0.25 / 0.5 / 1 / 2")
+    style_raw: bool | None = Field(None, description="True 时追加 --style raw（写实风格）")
+    chaos: int | None = Field(None, ge=0, le=100, description="--chaos 变化度 0-100")
 
 
 # ------------------------------ 应用 ------------------------------
@@ -231,7 +298,8 @@ async def lifespan(app: FastAPI):
                                          "User-Agent": "mj-gallery/1.0"})
     try:
         await get_token()
-        print("已登录（token 缓存于 %s）" % STATE_FILE)
+        codes = load_auth_codes()
+        print("已登录（加载 %d 个 Auth Code，token 缓存于 %s）" % (max(len(codes), 1), STATE_FILE))
     except Exception as exc:  # noqa: BLE001
         print("警告：登录失败 —— %s" % exc, file=sys.stderr)
     yield
@@ -240,6 +308,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MJ Gallery", version="1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def pick_code_middleware(request: Request, call_next):
+    """按 X-Auth-Code 头选择本次请求的 Auth Code（值为 /api/codes 返回的 key）。
+
+    未带或带了未知的 key 时回退到第一个 code；整条请求链路（含 upstream 重试）
+    都通过 _current_key 上下文取值，无需逐个端点传参。
+    """
+    key = (request.headers.get("X-Auth-Code") or "").strip()
+    codes = load_auth_codes()
+    valid = key if key in {k for k, _ in codes} else (codes[0][0] if codes else "")
+    ctx_token = _current_key.set(valid)
+    try:
+        return await call_next(request)
+    finally:
+        _current_key.reset(ctx_token)
 
 
 @app.get("/", response_class=FileResponse, include_in_schema=False)
@@ -324,10 +409,51 @@ async def tasks(ids: str = Query("", description="额外精确轮询的消息 id
     return {"tasks": out, "server_time": int(time.time())}
 
 
-@app.get("/api/user/info", summary="账户与剩余额度")
+@app.get("/api/codes", summary="可用的 Auth Code 列表（多账号切换）")
+async def codes():
+    items = load_auth_codes()
+    return {
+        "default": items[0][0] if items else "",
+        "codes": [{"key": key, "masked": mask_code(code)} for key, code in items],
+    }
+
+
+@app.get("/api/user/info", summary="当前账号的账户与剩余额度")
 async def user_info():
     res = await upstream("GET", "/api/user/info")
-    return res.get("data") or {}
+    data = res.get("data") or {}
+    # 上游返回的是 HTML 片段（content_html），顺手剥出纯文本给前端直接展示
+    html_text = data.get("content_html") or ""
+    text = re.sub(r"(?is)<script[^>]*>.*?</script>", "", html_text)
+    text = re.sub(r"(?i)<(br|/p|/div|/li|/tr|/h[1-6])[^>]*>", "\n", text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html_mod.unescape(text)
+    lines = [ln.strip(" \t") for ln in text.splitlines()]
+    lines = [ln for ln in lines if ln]
+    data["content_text"] = "\n".join(lines)
+
+    # 结构化额度：当前套餐 FAST/RELAX/TURBO -> 可用 / 已用 / 套餐数量
+    quota: dict[str, dict[str, Any]] = {}
+    current = ""
+    num = r"([\d,]+(?:\.\d+)?)"
+    for ln in lines:
+        pkg = re.search(r"\b(FAST|RELAX|TURBO)\b", ln, re.I)
+        if pkg and "套餐" in ln:
+            current = pkg.group(1).lower()
+            quota.setdefault(current, {})
+            continue
+        if not current:
+            continue
+        if m := re.search(r"可用数量\s*:?\s*" + num, ln):
+            quota[current]["available"] = float(m.group(1).replace(",", ""))
+        elif m := re.search(r"已用数量\s*:?\s*" + num, ln):
+            quota[current]["used"] = float(m.group(1).replace(",", ""))
+        elif m := re.search(r"套餐数量\s*:?\s*" + num + r"\s*(\S+)?", ln):
+            quota[current]["total"] = float(m.group(1).replace(",", ""))
+            quota[current]["unit"] = m.group(2) or ""
+    if quota:
+        data["quota"] = quota
+    return data
 
 
 @app.get("/api/models", summary="可选的绘图模型与默认设置")
@@ -360,6 +486,16 @@ async def imagine(req: ImagineRequest):
         prompt = "%s --ar %s" % (prompt, ar)
     if req.hd:
         prompt = "%s --hd" % prompt
+    if req.quality is not None:
+        quality = req.quality.strip()
+        if quality not in QUALITY_VALUES:
+            raise HTTPException(status_code=400,
+                                detail="--q 只能是 %s" % " / ".join(QUALITY_VALUES))
+        prompt = "%s --q %s" % (prompt, quality)
+    if req.style_raw:
+        prompt = "%s --style raw" % prompt
+    if req.chaos is not None:
+        prompt = "%s --chaos %d" % (prompt, req.chaos)
 
     # niji bot 只能吃 niji 模型；MJ bot 两者都收（与站点 settings 下拉一致）
     model = req.model

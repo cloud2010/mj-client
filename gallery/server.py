@@ -43,6 +43,8 @@ UPSTREAM = "https://zhongwenmj.aitoptop.cn"
 # 仅允许转发这两个图片域名，避免 SSRF
 ALLOWED_IMAGE_HOSTS = {"imagine-cdn.youchuan.cn", "cdn.aitoptop.cn"}
 STATE_FILE = Path.home() / ".mj-client" / "state.json"
+# 历史消息本地快照：每个 Auth Code key 一份，只存元数据（不下载图片）
+HISTORY_DIR = Path.home() / ".mj-client" / "history"
 HERE = Path(__file__).resolve().parent
 INDEX_FILE = HERE / "index.html"
 DEFAULT_PORT = 8321
@@ -162,6 +164,61 @@ def selected_code() -> str:
             detail="未找到 Auth Code：请设置 MJ_AUTH_CODE 或在项目根目录放置 AUTH_CODE.txt")
     known = dict(codes)
     return known.get(_current_key.get("")) or codes[0][1]
+
+
+def selected_key() -> str:
+    """当前请求的 Auth Code key（AUTHCODE_N），用于快照文件命名。"""
+    codes = load_auth_codes()
+    key = _current_key.get("")
+    if key and any(k == key for k, _ in codes):
+        return key
+    return codes[0][0] if codes else "AUTHCODE_1"
+
+
+# ------------------------------ 历史快照（只存元数据） ------------------------------
+
+def _history_file(key: str) -> Path:
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", key) or "default"
+    return HISTORY_DIR / ("%s.json" % safe)
+
+
+def _read_history(key: str) -> dict:
+    try:
+        return json.loads(_history_file(key).read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {"key": key, "updated_at": 0, "messages": {}}
+
+
+def merge_history(msgs: List[dict], pagination: dict | None = None) -> None:
+    """把一页消息按 id 增量合并进当前账号的本地快照（同步写，列表页每次拉取都会调用）。"""
+    items = [m for m in msgs if isinstance(m, dict) and m.get("id") is not None]
+    if not items:
+        return
+    key = selected_key()
+    snap = _read_history(key)
+    store = snap.setdefault("messages", {})
+    for m in items:
+        store[str(m["id"])] = m  # 同 id 覆盖，实现状态/进度的增量更新
+    snap["key"] = key
+    snap["updated_at"] = int(time.time())
+    if pagination:
+        snap["pagination"] = pagination
+    try:
+        HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = _history_file(key).with_suffix(".tmp")
+        tmp.write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(_history_file(key))
+    except Exception as exc:  # noqa: BLE001 快照失败不影响正常浏览
+        print("[history] 快照写入失败: %s: %s" % (type(exc).__name__, exc))
+
+
+def history_view(key: str) -> dict:
+    """读快照并按 submit_time 倒序返回（结构与 /api/list 对齐）。"""
+    snap = _read_history(key)
+    msgs = sorted(snap.get("messages", {}).values(),
+                  key=lambda m: -(m.get("submit_time") or 0))
+    return {"list": msgs, "pagination": snap.get("pagination") or {},
+            "updated_at": snap.get("updated_at") or 0, "count": len(msgs)}
 
 
 def _load_cached_token(code: str) -> tuple[str, float] | None:
@@ -361,7 +418,19 @@ async def message_list(
 ):
     res = await upstream("POST", "/api/msg/list", {"page_size": page_size, "before": before})
     data = res.get("data") or {}
-    return MessageList(list=data.get("list") or [], pagination=data.get("pagination") or {})
+    msgs, pagination = data.get("list") or [], data.get("pagination") or {}
+    merge_history(msgs, pagination)  # 本地快照：只存元数据
+    return MessageList(list=msgs, pagination=pagination)
+
+
+@app.get("/api/history", summary="读取本地历史快照（当前选中账号）")
+async def history_current():
+    return history_view(selected_key())
+
+
+@app.get("/api/history/{key}", summary="读取指定账号的本地历史快照")
+async def history_by_key(key: str):
+    return history_view(key)
 
 
 def _task_view(msg: dict) -> dict:

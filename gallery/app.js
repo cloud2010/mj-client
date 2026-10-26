@@ -2,6 +2,14 @@ const state = { before: 0, pageSize: 20, loading: false, done: false, total: 0, 
 const CODE_KEY = 'mj-auth-code';
 const $ = (id) => document.getElementById(id);
 
+/* 画廊按钮用的线性图标 */
+const ICON_EXPAND = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H4v5"/><path d="M15 4h5v5"/><path d="M20 15v5h-5"/><path d="M4 15v5h5"/></svg>';
+const ICON_DL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>';
+const ICON_GRID = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="7"/><rect x="14" y="4" width="7" height="7"/><rect x="3" y="13" width="7" height="7"/><rect x="14" y="13" width="7" height="7"/></svg>';
+const ICON_STACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>';
+const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="1.5"/><path d="M16 8V4.5A1.5 1.5 0 0 0 14.5 3h-10A1.5 1.5 0 0 0 3 4.5v10A1.5 1.5 0 0 0 4.5 16H8"/></svg>';
+const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
 /** 所有 /api 请求带上当前选中的 Auth Code key（服务端据此切换账号） */
 function apiHeaders(extra) {
   const h = Object.assign({}, extra);
@@ -79,23 +87,20 @@ function card(msg) {
   imgs.forEach((img, i) => {
     const tile = document.createElement('div');
     tile.className = 'tile';
-    tile.title = '点击下载原图';
+    tile.title = '点击查看大图';
     const name = `${fileBase(msg)}_${i + 1}${extOf(img.full)}`;
     tile.innerHTML =
-      (imgs.length > 1 ? `<span class="idx">${i + 1}</span>` : '') +
+      (imgs.length > 1 ? `<span class="idx">${String(i + 1).padStart(2, '0')}</span>` : '') +
       `<img loading="lazy" src="${img.thumb}" alt="image ${i + 1}">` +
-      `<span class="hover"><span class="acts">` +
-      `<button type="button" class="pill" data-act="dl">下载 PNG</button>` +
-      `<button type="button" class="pill" data-act="pv">预览</button>` +
-      `</span></span>`;
-    tile.addEventListener('click', () => download(img.full, name));
+      `<span class="hover">` +
+      `<span class="zoom">${ICON_EXPAND}</span>` +
+      `<button type="button" class="tile-dl" data-act="dl" title="下载原图" aria-label="下载原图">${ICON_DL}</button>` +
+      `</span>`;
+    /* 整张图就是预览入口 */
+    tile.addEventListener('click', () => openPreview(msg, imgs, i));
     tile.querySelector('[data-act="dl"]').addEventListener('click', (e) => {
       e.stopPropagation();
       download(img.full, name);
-    });
-    tile.querySelector('[data-act="pv"]').addEventListener('click', (e) => {
-      e.stopPropagation();
-      openPreview(msg, imgs, i);
     });
     tiles.appendChild(tile);
   });
@@ -104,29 +109,41 @@ function card(msg) {
   meta.className = 'meta';
   const merged = mergedImage(msg);
   const type = msg.type === 'NIJI_JOURNEY' ? 'niji' : 'Midjourney';
-  const action = msg.action ? ` · ${msg.action}` : '';
+  const action = msg.action ? String(msg.action).trim() : '';
   const task = msg.task || {};
   const prompt = (task.prompt_en || task.prompt || msg.message_content || '').replace(/\*\*/g, '').trim();
 
   meta.innerHTML =
-    `<div class="badges">
+    `<div class="plate">
+       <span class="plate-no">№ ${msg.id}</span>
        ${statusBadge(msg)}
        <span class="badge type">${type}</span>
-       <span class="badge">#${msg.id}</span>
        ${task.progress && msg.status !== 'SUCCESS' ? `<span class="badge warn">${task.progress}</span>` : ''}
        ${imgs.length > 1 ? `<span class="badge">${imgs.length} 张</span>` : ''}
-       <span style="font-size:11px;color:var(--muted)">${action}</span>
+       ${action ? `<span class="badge ghost">${escapeHtml(action)}</span>` : ''}
      </div>
-     <p class="prompt" title="点击展开/收起">${prompt ? escapeHtml(prompt) : '（无提示词）'}</p>
+     <div class="prompt-block">
+       <span class="prompt-label">PROMPT<b>提示词</b></span>
+       <p class="prompt" title="点击展开 / 收起">${prompt ? escapeHtml(prompt) : '（无提示词）'}</p>
+     </div>
      <div class="foot">
        <span class="time">${fmtTime(msg.finish_time || msg.submit_time)}</span>
-       ${merged ? `<button class="mini" data-merged="1">下载合图</button>` : ''}
-       ${imgs.length > 1 ? `<button class="mini" data-all="1">下载全部 ${imgs.length} 张</button>` : ''}
-       <button class="mini" data-copy="1">复制提示词</button>
-       <button class="mini danger" data-del="1">删除</button>
+       <span class="tools">
+         ${imgs.length === 1 ? `<button class="mini icon" data-single="1" title="下载原图" aria-label="下载原图">${ICON_DL}</button>` : ''}
+         ${merged ? `<button class="mini icon" data-merged="1" title="下载四宫格合图" aria-label="下载合图">${ICON_GRID}</button>` : ''}
+         ${imgs.length > 1 ? `<button class="mini icon" data-all="1" title="下载全部 ${imgs.length} 张" aria-label="下载全部 ${imgs.length} 张">${ICON_STACK}</button>` : ''}
+         <button class="mini icon" data-copy="1" title="复制提示词" aria-label="复制提示词">${ICON_COPY}</button>
+         <button class="mini icon danger" data-del="1" title="删除这条消息" aria-label="删除">${ICON_TRASH}</button>
+       </span>
      </div>`;
 
   meta.querySelector('.prompt').addEventListener('click', (e) => e.currentTarget.classList.toggle('open'));
+  const singleBtn = meta.querySelector('[data-single]');
+  if (singleBtn) {
+    singleBtn.addEventListener('click', () => {
+      download(imgs[0].full, `${fileBase(msg)}_1${extOf(imgs[0].full)}`);
+    });
+  }
   const allBtn = meta.querySelector('[data-all]');
   if (allBtn) {
     allBtn.addEventListener('click', () => {
@@ -551,8 +568,8 @@ function applyTheme(theme, persist = true) {
   document.documentElement.dataset.theme = light ? 'light' : 'dark';
   if (persist) { try { localStorage.setItem(THEME_KEY, light ? 'light' : 'dark'); } catch (e) {} }
   $('themeIcon').innerHTML = light ? ICON_SUN : ICON_MOON;
-  $('themeLabel').textContent = light ? '浅色' : '深色';
-  $('themeBtn').title = light ? '当前浅色 · 点击切换深色' : '当前深色 · 点击切换浅色';
+  $('themeLabel').textContent = light ? '牛皮纸' : '暗金';
+  $('themeBtn').title = light ? '当前：牛皮纸白卡 · 点击切换暗金博物馆' : '当前：暗金博物馆 · 点击切换牛皮纸白卡';
 }
 $('themeBtn').addEventListener('click', () => {
   applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');

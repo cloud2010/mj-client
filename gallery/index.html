@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJ 图库 · 我的生成记录</title>
+<title>MJ Gallery · 我的生成记录</title>
 <script>
   /* 在样式生效前定好主题，避免刷新时闪一下白/黑 */
   (function () {
@@ -25,14 +25,13 @@
 <header>
   <div class="bar">
     <div class="logo">
-      <div class="dot">MJ</div>
-      <div>
-        <h1>我的生成记录</h1>
-        <p>点图下载单张 PNG · 悬停图片可预览大图 · 卡片底部可下载合图 / 删除该条消息</p>
+      <div class="mark">MJ</div>
+      <div class="brand">
+        <h1>MJ Gallery</h1>
+        <p class="eyebrow">PRIVATE ARCHIVE · 个人画廊</p>
       </div>
     </div>
     <div class="ctrl">
-      <span class="count" id="count">—</span>
       <select id="authCode" title="切换 Auth Code（不同账号对应不同图库与额度）" style="display:none"></select>
       <div id="quotaWrap" style="display:none">
         <button id="quotaBtn" class="theme-btn" title="查看当前账号剩余额度（/info）">额度 …</button>
@@ -45,28 +44,43 @@
           <button data-preset="niji">Niji 8.2<small>动漫插画风格</small></button>
         </div>
       </div>
-      <select id="pageSize">
+      <select id="pageSize" title="每页数量">
         <option value="10">每页 10</option>
         <option value="20" selected>每页 20</option>
         <option value="30">每页 30</option>
       </select>
       <button id="refresh">刷新</button>
-      <button id="themeBtn" class="theme-btn" title="切换深色 / 浅色主题">
-        <span id="themeIcon"></span><span id="themeLabel">深色</span>
+      <button id="themeBtn" class="theme-btn" title="切换主题">
+        <span id="themeIcon"></span><span id="themeLabel">暗金</span>
       </button>
     </div>
   </div>
 </header>
 
 <main>
+  <section class="hero">
+    <div class="hero-eyebrow"><span class="line"></span><span class="diamond">◆</span>EST. 2026 · 私人藏品<span class="diamond">◆</span><span class="line"></span></div>
+    <h2 class="hero-title">每一次生成，<br class="br-mobile">都是一件藏品</h2>
+    <p class="hero-sub">点击图片即可预览大图 · 图片右上角下载原图 · 卡片底部可下载合图 / 复制提示词 / 删除该条消息</p>
+    <div class="hero-count"><span id="count">—</span></div>
+  </section>
+
   <div class="banner" id="banner"></div>
+
   <section class="tasks-wrap" id="tasksWrap" style="display:none">
     <div class="tasks-head">
-      <h2>进行中的任务 <span class="badge" id="tasksCount">0</span></h2>
+      <h2><span class="live-dot"></span>进行中的任务 <span class="badge" id="tasksCount">0</span></h2>
       <span class="hint" id="tasksHint">每 4 秒自动刷新</span>
     </div>
     <div class="tasks" id="tasks"></div>
   </section>
+
+  <div class="section-head">
+    <h2>作品长廊</h2>
+    <span class="rule"></span>
+    <span class="hint">THE COLLECTION</span>
+  </div>
+
   <div class="grid" id="grid"></div>
   <div class="empty" id="empty" style="display:none">
     <div class="spinner" id="spinner" style="display:none"></div>
@@ -78,7 +92,10 @@
 <div class="modal-mask" id="genMask" hidden>
   <form class="modal" id="genForm">
     <header>
-      <h2>生成图片</h2>
+      <div class="modal-title">
+        <p class="eyebrow">COMPOSE</p>
+        <h2>生成图片</h2>
+      </div>
       <button type="button" class="mini" id="genClose">关闭</button>
     </header>
     <div class="body">
@@ -86,6 +103,7 @@
         <label for="genPrompt">提示词</label>
         <textarea id="genPrompt" placeholder="描述你想生成的画面…&#10;额外参数（如 --no xxx --raw）可直接写在末尾"></textarea>
       </div>
+      <div class="group-label"><span>画面</span><i></i></div>
       <div class="row">
         <div class="field">
           <label for="genModel">模型</label>
@@ -128,6 +146,7 @@
           </select>
         </div>
       </div>
+      <div class="group-label"><span>细节参数</span><i></i></div>
       <div class="row">
         <div class="field">
           <label for="genQuality">质量 --q</label>
@@ -177,17 +196,20 @@
 
 <div class="modal-mask" id="pvMask" hidden>
   <div class="pv">
+    <div class="pv-head">
+      <span class="pv-eyebrow">PREVIEW</span>
+      <span class="hint" id="pvInfo"></span>
+      <div class="pv-tools">
+        <button type="button" class="mini" id="pvOpen">在新窗口打开原图</button>
+        <button type="button" class="mini" id="pvDl">下载 PNG</button>
+        <button type="button" class="mini icon" id="pvClose" title="关闭">✕</button>
+      </div>
+    </div>
     <div class="pv-stage loading" id="pvStage">
+      <button type="button" class="pv-nav prev" id="pvPrev" title="上一张">‹</button>
       <img id="pvImg" alt="预览图">
       <div class="spin"></div>
-    </div>
-    <div class="pv-bar">
-      <span class="hint" id="pvInfo"></span>
-      <button type="button" class="mini" id="pvPrev">← 上一张</button>
-      <button type="button" class="mini" id="pvNext">下一张 →</button>
-      <button type="button" class="mini" id="pvOpen">新窗口打开原图</button>
-      <button type="button" class="mini" id="pvDl">下载 PNG</button>
-      <button type="button" class="mini" id="pvClose">关闭</button>
+      <button type="button" class="pv-nav next" id="pvNext" title="下一张">›</button>
     </div>
   </div>
 </div>

@@ -16,6 +16,8 @@ dist/
 .venv/
 venv/
 env/
+output/
+design/
 runs/*.json
 runs/*.md
 prompts/*.json

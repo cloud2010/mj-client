@@ -75,8 +75,8 @@ mj.py imagine "modern glass cabin in a snowy forest at dusk, warm interior glow,
 # 动漫角色立绘
 mj.py imagine "1girl, silver hair, red kimono, cherry blossom petals, upper body, clean lineart, soft shading" --type NIJI_JOURNEY --model "--niji 6" --ar 2:3 --speed fast --wait
 
-# 角色设定稿（niji 8.2，带三视图与名称条）
-mj.py imagine "character design sheet, knight girl in blue armor, front view with small side and back head shots, white background, name plate" --type NIJI_JOURNEY --model "--niji 8.2" --ar 4:5 --speed relax --wait
+# 角色设定稿（niji 7，带三视图与名称条；Niji 最高只到 v7）
+mj.py imagine "character design sheet, knight girl in blue armor, front view with small side and back head shots, white background, name plate" --type NIJI_JOURNEY --model "--niji 7" --ar 4:5 --speed relax --wait
 
 # Q 版贴纸
 mj.py imagine "cute chibi cat sticker, thick white outline, pastel colors, simple background" --type NIJI_JOURNEY --model "--niji 6" --ar 1:1 --suffix "--no text" --speed fast --wait

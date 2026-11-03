@@ -25,7 +25,7 @@ description: 通过 zhongwenmj.aitoptop.cn（中文 Midjourney 网页版 /channe
 ```bash
 python scripts/mj.py auth                       # 登录，缓存 token，返回套餐与默认设置
 python scripts/mj.py me                         # 账户与剩余额度
-python scripts/mj.py models                     # 可选模型清单（含 --v 8.2 / --niji 8.2）+ 账号默认设置
+python scripts/mj.py models                     # 可选模型清单（含 --v 8.2 / --niji 7）+ 账号默认设置
 python scripts/mj.py list --page-size 10        # 历史消息（--pages N 连续翻页）
 
 python scripts/mj.py imagine "a red panda in a bamboo forest" --ar 16:9 --model "--v 8.2" --speed fast
@@ -51,14 +51,14 @@ python scripts/mj.py raw POST /api/msg/list --body @body.json   # 任意接口�
 
 `describe` / `blend` / `upload` 接受本地路径（自动上传）或 http(s) URL。
 
-### 可选模型（2026-10 起站点已支持 MJ 8.2 / Niji 8.2）
+### 可选模型（MJ 已到 v8.2；Niji 最高仅 v7，不存在 `--niji 8.x`）
 
 | bot | 可选 `--model` |
 |-----|----------------|
 | `MID_JOURNEY` | `--v 8.2`（最新旗舰）、`--v 7`、`--v 6.1`、`--v 6.0`、`--v 6`、`--v 5.2`、`--v 5.1`、`--v 5`、`--v 4`、`--v 3`、`--v 2`、`--v 1`、``（空=站点默认 V5.2） |
-| `NIJI_JOURNEY` | `--niji 8.2`（最新）、`--niji 7`、`--niji 6`、`--niji 5`、`--niji 4` |
+| `NIJI_JOURNEY` | `--niji 7`（最高版本）、`--niji 6`、`--niji 5`、`--niji 4` |
 
-未显式传 `--model` 时沿用账号保存的设置（该账号 MID_JOURNEY 现为 `--v 8.2` + relax，NIJI_JOURNEY 为 `--niji 6`）。
+未显式传 `--model` 时沿用账号保存的设置（该账号 MID_JOURNEY 现为 `--v 8.2` + relax，NIJI_JOURNEY 为 `--niji 6`）。**动漫/二次元一律用 `--niji 7`，不要写 `--niji 8.2`（站点不支持）。**
 传了列表外的值只会在 stderr 提示，仍会原样提交。
 
 ## 上传通道
@@ -125,11 +125,11 @@ python scripts/mj.py imagine "flat vector illustration of a city skyline at sunr
 # 动漫角色立绘
 python scripts/mj.py imagine "1girl, silver hair, red kimono, cherry blossom petals, upper body, clean lineart, soft shading" --type NIJI_JOURNEY --model "--niji 6" --ar 2:3 --speed fast --wait
 
-# 角色设定稿（niji 8.2，带三视图与配色板）
-python scripts/mj.py imagine "character design sheet, knight girl in blue armor, front view with small side and back head shots, white background, name plate" --type NIJI_JOURNEY --model "--niji 8.2" --ar 4:5 --speed relax --wait
+# 角色设定稿（niji 7，带三视图与配色板）
+python scripts/mj.py imagine "character design sheet, knight girl in blue armor, front view with small side and back head shots, white background, name plate" --type NIJI_JOURNEY --model "--niji 7" --ar 4:5 --speed relax --wait
 
 # 动漫场景 / 主视觉
-python scripts/mj.py imagine "anime key visual, two colossal mecha standing behind two pilots, dramatic sky, theatrical anime film" --type NIJI_JOURNEY --model "--niji 8.2" --ar 16:9 --stylize 300 --speed fast --wait
+python scripts/mj.py imagine "anime key visual, two colossal mecha standing behind two pilots, dramatic sky, theatrical anime film" --type NIJI_JOURNEY --model "--niji 7" --ar 16:9 --stylize 300 --speed fast --wait
 
 # Q 版贴纸
 python scripts/mj.py imagine "cute chibi cat sticker, thick white outline, pastel colors, simple background" --type NIJI_JOURNEY --model "--niji 6" --ar 1:1 --suffix "--no text" --speed fast --wait
@@ -155,7 +155,7 @@ python scripts/mj.py action 3222824 V2 --wait   # 或对第 2 张做变体
 ## 关键约束
 
 - `--type` 需与被操作消息的 `type` 一致（`MID_JOURNEY` / `NIJI_JOURNEY`），`action`/`modal`/`seed`/`cancel` 会自动沿用消息自带的 type。示例见上文「`--type` 用法」。
-- `--speed`：relax（慢、便宜）、fast、turbo；出图消耗额度，`me` 可查剩余。默认沿用账号保存的设置（该账号 MID_JOURNEY 现为 `--v 8.2` + relax，NIJI_JOURNEY 为 `--niji 6`），要其它版本请显式 `--model`（`--v 7` / `--v 6.1` / `--niji 8.2` …）。
+- `--speed`：relax（慢、便宜）、fast、turbo；出图消耗额度，`me` 可查剩余。默认沿用账号保存的设置（该账号 MID_JOURNEY 现为 `--v 8.2` + relax，NIJI_JOURNEY 为 `--niji 6`），要其它版本请显式 `--model`（`--v 7` / `--v 6.1` / `--niji 7` …）。
 - `--ar 16:9`、`--no text`、`--raw` 等其它参数用 `--suffix` 追加或直接写在 prompt 末尾（写实风格拼 `--raw`，不要拼 `--style raw`）。
 - 输出统一为 JSON（stdout），失败时 stderr 打印 `ERROR: API <code>: <msg>` 并以非 0 退出。
 

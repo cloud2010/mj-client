@@ -41,13 +41,13 @@
         <button id="genBtn" class="primary">生成图片</button>
         <div id="genMenu">
           <button data-preset="mj">Midjourney v8.2<small>通用写实 / 概念插画</small></button>
-          <button data-preset="niji">Niji 8.2<small>动漫插画风格</small></button>
+          <button data-preset="niji">Niji 7<small>动漫插画风格（Niji 最高版本）</small></button>
         </div>
       </div>
       <select id="pageSize" title="每页数量">
-        <option value="10">每页 10</option>
-        <option value="20" selected>每页 20</option>
-        <option value="30">每页 30</option>
+        <option value="8" selected>每屏 8 组（2 × 4）</option>
+        <option value="16">每屏 16 组（2 × 8）</option>
+        <option value="24">每屏 24 组</option>
       </select>
       <button id="refresh">刷新</button>
       <button id="themeBtn" class="theme-btn" title="切换主题">
@@ -78,7 +78,7 @@
   <div class="section-head">
     <h2>作品长廊</h2>
     <span class="rule"></span>
-    <span class="hint">THE COLLECTION</span>
+    <span class="hint">TWO COLUMNS · FOUR PER COLUMN</span>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -112,8 +112,7 @@
             <option value="MID_JOURNEY|--v 7">Midjourney v7</option>
             <option value="MID_JOURNEY|--v 6.1">Midjourney v6.1</option>
             <option value="MID_JOURNEY|--v 6.0">Midjourney v6.0</option>
-            <option value="NIJI_JOURNEY|--niji 8.2">Niji 8.2（动漫）</option>
-            <option value="NIJI_JOURNEY|--niji 7">Niji 7（动漫）</option>
+            <option value="NIJI_JOURNEY|--niji 7">Niji 7（动漫 · 最高版本）</option>
             <option value="NIJI_JOURNEY|--niji 6">Niji 6（动漫）</option>
           </select>
         </div>

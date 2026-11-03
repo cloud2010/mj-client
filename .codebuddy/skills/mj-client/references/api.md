@@ -97,7 +97,7 @@
 {"model": "--v 7", "style": "", "stylize": 100, "remix": false, "variation": "high", "speed": "fast"}
 ```
 
-- `model`：服务端接受的取值见下方「模型清单」（2026-10 起支持 `--v 8.2` / `--niji 8.2`）
+- `model`：服务端接受的取值见下方「模型清单」（MJ 最高 `--v 8.2`；Niji 最高 `--niji 7`，没有 `--niji 8.x`）
 - 传了不存在的值（如 `--v 9`）时接口仍返回 200，任务会在 MJ 侧变成 `FAILURE`。
 - `style`：对应 `--style <value>`
 - `stylize`：0~1000，对应 `--s <n>`
@@ -109,7 +109,7 @@
 #### 模型清单（取自前端 `assets/settings-*.js` 的 `A`（MJ）与 `U`（Niji）两个下拉数组）
 
 - MJ（`MID_JOURNEY`）：`""`（站点默认 V5.2）、`--v 8.2`、`--v 7`、`--v 6.1`、`--v 6.0`、`--niji 7`、`--niji 6`、`--v 5.2`、`--v 5.1`、`--niji 5`、`--v 5`、`--niji 4`、`--v 4`、`--v 3`、`--v 2`、`--v 1`
-- Niji（`NIJI_JOURNEY`）：`--niji 4`、`--niji 5`、`--niji 6`、`--niji 7`、`--niji 8.2`
+- Niji（`NIJI_JOURNEY`）：`--niji 7`（最高版本）、`--niji 6`、`--niji 5`、`--niji 4`
 
 ### 7. DELETE /api/msg/delete/{msg_id}
 

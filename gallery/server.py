@@ -69,16 +69,16 @@ _client: httpx.AsyncClient | None = None
 # 前端可选的画图 option（值需与上游 settings 字段一致）
 BOT_TYPES = {"MID_JOURNEY", "NIJI_JOURNEY"}
 SPEEDS = {"relax", "fast", "turbo"}
-# 2026-10 起站点已支持 MJ 8.2 / Niji 8.2（取自前端 settings 下拉）
-MODELS = {"", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6", "--niji 8.2", "--niji 7", "--niji 6"}
+# 站点模型：MJ 已到 v8.2，Niji 最高只有 v7（不存在 --niji 8.x）
+MODELS = {"", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6", "--niji 7", "--niji 6"}
 MODELS_MJ = {"", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6"}
-MODELS_NIJI = {"--niji 8.2", "--niji 7", "--niji 6"}
+MODELS_NIJI = {"--niji 7", "--niji 6"}
 # --q 质量可选值（MJ 官方口径；站点 settings 不含此参数，故拼进提示词）
 QUALITY_VALUES = ("0.25", "0.5", "1", "2")
 DEFAULT_SETTINGS = {
     "MID_JOURNEY": {"model": "--v 8.2", "style": "", "stylize": 100,
                     "remix": False, "variation": "high", "speed": "fast"},
-    "NIJI_JOURNEY": {"model": "--niji 8.2", "style": "", "stylize": 100,
+    "NIJI_JOURNEY": {"model": "--niji 7", "style": "", "stylize": 100,
                      "remix": False, "variation": "high", "speed": "fast"},
 }
 

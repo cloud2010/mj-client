@@ -1,4 +1,4 @@
-const state = { before: 0, pageSize: 20, loading: false, done: false, total: 0, grandTotal: 0, code: '' };
+const state = { before: 0, pageSize: 8, loading: false, done: false, total: 0, grandTotal: 0, code: '' };
 const CODE_KEY = 'mj-auth-code';
 const $ = (id) => document.getElementById(id);
 
@@ -397,7 +397,7 @@ document.addEventListener('keydown', (e) => {
 /* ---------------- 生成图片弹窗 ---------------- */
 function openGen(preset) {
   const sel = $('genModel');
-  if (preset === 'niji') sel.value = 'NIJI_JOURNEY|--niji 8.2';
+  if (preset === 'niji') sel.value = 'NIJI_JOURNEY|--niji 7';
   else if (preset === 'mj') sel.value = 'MID_JOURNEY|--v 8.2';
   $('genStatus').textContent = '';
   $('genMask').classList.add('show');

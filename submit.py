@@ -277,7 +277,7 @@ def build_parser():
     p.add_argument("--only", help="只提交指定 id，逗号分隔")
     p.add_argument("--limit", type=int, help="只提交前 N 条")
     p.add_argument("--type", choices=["MID_JOURNEY", "NIJI_JOURNEY"], help="覆盖机器人类型")
-    p.add_argument("--model", help='模型，如 "--v 8.2" / "--niji 8.2"')
+    p.add_argument("--model", help='模型，如 "--v 8.2" / "--niji 7"（Niji 最高 v7）')
     p.add_argument("--stylize", type=int)
     p.add_argument("--style")
     p.add_argument("--speed", choices=["relax", "fast", "turbo"])

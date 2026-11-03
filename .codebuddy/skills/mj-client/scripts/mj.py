@@ -34,7 +34,7 @@ DEFAULT_SETTINGS_MJ = {
     "speed": "fast",
 }
 DEFAULT_SETTINGS_NIJI = {
-    "model": "--niji 6",
+    "model": "--niji 7",
     "style": "",
     "stylize": 100,
     "remix": False,
@@ -42,10 +42,10 @@ DEFAULT_SETTINGS_NIJI = {
     "speed": "fast",
 }
 
-# 站点 settings 下拉里可选的模型（2026-10 起支持 MJ 8.2 / Niji 8.2）
+# 站点 settings 下拉里可选的模型：MJ 已到 v8.2，Niji 最高仅 v7（无 --niji 8.x）
 MODELS_MJ = ["", "--v 8.2", "--v 7", "--v 6.1", "--v 6.0", "--v 6",
              "--v 5.2", "--v 5.1", "--v 5", "--v 4", "--v 3", "--v 2", "--v 1"]
-MODELS_NIJI = ["--niji 8.2", "--niji 7", "--niji 6", "--niji 5", "--niji 4"]
+MODELS_NIJI = ["--niji 7", "--niji 6", "--niji 5", "--niji 4"]
 SUPPORTED_MODELS = set(MODELS_MJ) | set(MODELS_NIJI)
 
 TERMINAL_STATUS = {"SUCCESS", "FAILURE", "CANCEL"}
@@ -450,7 +450,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("auth", help="登录并缓存 token（同时返回配额与默认设置）")
     sub.add_parser("app-info", help="GET /api/app/info 首页信息")
     sub.add_parser("me", help="GET /api/user/info 账户与配额")
-    sub.add_parser("models", help="列出可选模型（含 --v 8.2 / --niji 8.2）及账号默认设置")
+    sub.add_parser("models", help="列出可选模型（含 --v 8.2 / --niji 7）及账号默认设置")
 
     p = sub.add_parser("list", help="POST /api/msg/list 消息列表")
     p.add_argument("--page-size", type=int, default=10)

@@ -527,11 +527,11 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 30px 48px; position: relati
 .section-head .rule { flex: 1; height: 1px; background: var(--gold-rule); }
 .section-head .hint { font-size: 9px; letter-spacing: .28em; color: var(--muted); white-space: nowrap; }
 
-/* ============================== 画廊网格（两列 · 每列四组） ============================== */
+/* ============================== 画廊网格（三列 · 每行四组） ============================== */
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 26px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
 }
 
 .card {
@@ -596,21 +596,25 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 30px 48px; position: relati
   outline-offset: 2px;
 }
 
-/* 载入时逐张浮现（一屏 8 组，2×4） */
-.grid .card:nth-child(8n + 1) { animation-delay: 0ms; }
-.grid .card:nth-child(8n + 2) { animation-delay: 45ms; }
-.grid .card:nth-child(8n + 3) { animation-delay: 90ms; }
-.grid .card:nth-child(8n + 4) { animation-delay: 135ms; }
-.grid .card:nth-child(8n + 5) { animation-delay: 180ms; }
-.grid .card:nth-child(8n + 6) { animation-delay: 225ms; }
-.grid .card:nth-child(8n + 7) { animation-delay: 270ms; }
-.grid .card:nth-child(8n + 8) { animation-delay: 315ms; }
+/* 载入时逐张浮现（一屏 12 组，3×4） */
+.grid .card:nth-child(12n + 1) { animation-delay: 0ms; }
+.grid .card:nth-child(12n + 2) { animation-delay: 40ms; }
+.grid .card:nth-child(12n + 3) { animation-delay: 80ms; }
+.grid .card:nth-child(12n + 4) { animation-delay: 120ms; }
+.grid .card:nth-child(12n + 5) { animation-delay: 160ms; }
+.grid .card:nth-child(12n + 6) { animation-delay: 200ms; }
+.grid .card:nth-child(12n + 7) { animation-delay: 240ms; }
+.grid .card:nth-child(12n + 8) { animation-delay: 280ms; }
+.grid .card:nth-child(12n + 9) { animation-delay: 320ms; }
+.grid .card:nth-child(12n + 10) { animation-delay: 360ms; }
+.grid .card:nth-child(12n + 11) { animation-delay: 400ms; }
+.grid .card:nth-child(12n + 12) { animation-delay: 440ms; }
 
 /* 画框（照片装裱） */
 .tiles {
   display: grid;
-  gap: 7px;
-  padding: 11px;
+  gap: 6px;
+  padding: 9px;
   background: var(--frame);
   border-bottom: 1px solid var(--border);
   box-shadow: inset 0 0 0 1px var(--inner-line);
@@ -721,7 +725,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 30px 48px; position: relati
   flex-direction: column;
   gap: 12px;
   flex: 1;
-  padding: 18px 20px 15px;
+  padding: 16px 17px 14px;
 }
 .plate {
   display: flex;
@@ -792,7 +796,7 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 30px 48px; position: relati
   overflow: hidden;
   margin: 0;
   font-family: var(--serif);
-  font-size: 15px;
+  font-size: 14.5px;
   line-height: 1.85;
   color: var(--text-2);
   cursor: pointer;
@@ -1170,10 +1174,10 @@ main { max-width: 1340px; margin: 0 auto; padding: 0 30px 48px; position: relati
 
 /* ============================== 响应式 ============================== */
 @media (max-width: 1180px) {
-  .grid { gap: 20px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 820px) {
   .bar { padding: 11px 16px; gap: 10px; }
   main { padding: 0 16px 34px; }
   .hero { padding: 38px 12px 28px; }

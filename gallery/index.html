@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MJ Gallery · 我的生成记录</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="alternate icon" type="image/png" href="/favicon-180.png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<meta name="theme-color" content="#0c0a07">
 <script>
   /* 在样式生效前定好主题，避免刷新时闪一下白/黑 */
   (function () {
@@ -45,9 +49,9 @@
         </div>
       </div>
       <select id="pageSize" title="每页数量">
-        <option value="8" selected>每屏 8 组（2 × 4）</option>
-        <option value="16">每屏 16 组（2 × 8）</option>
-        <option value="24">每屏 24 组</option>
+        <option value="12" selected>每屏 12 组（3 × 4）</option>
+        <option value="24">每屏 24 组（3 × 8）</option>
+        <option value="36">每屏 36 组</option>
       </select>
       <button id="refresh">刷新</button>
       <button id="themeBtn" class="theme-btn" title="切换主题">
@@ -78,7 +82,7 @@
   <div class="section-head">
     <h2>作品长廊</h2>
     <span class="rule"></span>
-    <span class="hint">TWO COLUMNS · FOUR PER COLUMN</span>
+    <span class="hint">THREE COLUMNS · FOUR PER ROW</span>
   </div>
 
   <div class="grid" id="grid"></div>

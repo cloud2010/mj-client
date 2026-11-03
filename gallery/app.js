@@ -1,4 +1,4 @@
-const state = { before: 0, pageSize: 8, loading: false, done: false, total: 0, grandTotal: 0, code: '' };
+const state = { before: 0, pageSize: 12, loading: false, done: false, total: 0, grandTotal: 0, code: '' };
 const CODE_KEY = 'mj-auth-code';
 const $ = (id) => document.getElementById(id);
 
@@ -43,10 +43,12 @@ function statusBadge(msg) {
 function pickImages(msg) {
   const arr = (msg.image_urls || []).filter(Boolean);
   if (arr.length) {
-    return arr.map((it) => ({ thumb: it.thumbnail || it.url, full: it.url }));
+    // 单图卡片会铺满整卡宽度，用原图更清晰；四宫格缩略图只有 ~190px，384 足够
+    const single = arr.length === 1;
+    return arr.map((it) => ({ thumb: single ? it.url : (it.thumbnail || it.url), full: it.url }));
   }
   const full = msg.image_url || msg.cdn_image_url || '';
-  if (full) return [{ thumb: msg.thumbnail_image_url || full, full }];
+  if (full) return [{ thumb: full, full }];
   return [];
 }
 

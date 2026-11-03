@@ -411,6 +411,18 @@ async def app_js():
     return _asset("app.js", "application/javascript; charset=utf-8")
 
 
+@app.get("/favicon.svg", include_in_schema=False)
+async def favicon_svg():
+    return _asset("favicon.svg", "image/svg+xml")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/favicon-180.png", include_in_schema=False)
+async def favicon_png():
+    # 老浏览器及部分爬虫会直接请求 /favicon.ico，用 PNG 兜底即可
+    return _asset("favicon-180.png", "image/png")
+
+
 @app.get("/api/list", response_model=MessageList, summary="最近生成的消息列表")
 async def message_list(
     page_size: int = Query(20, ge=1, le=50, description="每页条数"),
